@@ -1,9 +1,11 @@
-import mongoose from "mongoose";
+import { connect } from "mongoose";
+import { UserModel } from "./models/User.model";
 
-const connectDB = async () => {
+const connectDB = async (): Promise<void> => {
     try {
-        const URL: string | undefined = process.env.DB_URL || "";
-        const result = await mongoose.connect(URL, { serverSelectionTimeoutMS: 30000 });
+        const URI: string | undefined = process.env.DB_URL || "";
+        const result = await connect(URI, { serverSelectionTimeoutMS: 30000 });
+        UserModel.syncIndexes();
         console.log(result.models);
         console.log("DB Connected Successfully ✅");
     } catch (error) {

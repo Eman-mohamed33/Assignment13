@@ -1,9 +1,9 @@
-import bcryptjs from "bcryptjs";
+import { compare, hash } from "bcrypt";
 
-export const generateHash = async ({ plainText = "", saltRound = process.env.SALT } = {}) => {
-    return bcryptjs.hashSync(plainText, parseInt(saltRound as string));
+export const generateHash = async (plainText: string, saltRound: number = Number(process.env.SALT)): Promise<string> => {
+    return hash(plainText, saltRound);
 };
 
-export const compareHash = async ({ plainText = "", hashValue = "" } = {}) => {
-    return bcryptjs.compareSync(plainText, hashValue);
+export const compareHash = async (plainText: string, hashValue: string): Promise<boolean> => {
+    return compare(plainText, hashValue);
 };

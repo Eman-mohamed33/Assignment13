@@ -31,10 +31,12 @@ const validation = (schema) => {
 };
 exports.validation = validation;
 exports.generalFields = {
-    fullName: zod_1.z.string().min(2).max(20),
+    userName: zod_1.z.string().min(2).max(20),
     email: zod_1.z.email(),
     password: zod_1.z.string().regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$%^&*()_.]).{8,16}$/),
     confirmPassword: zod_1.z.string(),
-    gender: zod_1.z.enum(Object.values(User_model_1.genderEnum)),
-    phone: zod_1.z.string().regex(/^(002|\+2)?01[0125]\d{8}$/)
+    gender: zod_1.z.enum(Object.values(User_model_1.GenderEnum)),
+    phone: zod_1.z.string().regex(/^(002|\+2)?01[0125]\d{8}$/),
+    age: zod_1.z.number(),
+    otp: zod_1.z.string().regex(/^\d{6}$/)
 };

@@ -1,12 +1,13 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendEmail = sendEmail;
-const nodemailer_1 = __importDefault(require("nodemailer"));
-async function sendEmail({ from = "", to = "", subject = "Hello ✔", text = "Hello world?", cc = "", bcc = "", html = "<b>Hello world?</b>", attachments = [] } = {}) {
-    const transporter = nodemailer_1.default.createTransport({
+const nodemailer_1 = require("nodemailer");
+const error_response_1 = require("../Response/error.response");
+async function sendEmail(data) {
+    if (!data.html && !data.text && !data.attachments) {
+        throw new error_response_1.BadRequestException("Missing Email Content");
+    }
+    const transporter = (0, nodemailer_1.createTransport)({
         service: "gmail",
         auth: {
             user: process.env.APP_EMAIL,
@@ -14,14 +15,8 @@ async function sendEmail({ from = "", to = "", subject = "Hello ✔", text = "He
         },
     });
     const info = await transporter.sendMail({
-        from: `"Social Media 🍰" <${from}>`,
-        to,
-        subject,
-        text,
-        html,
-        attachments,
-        cc,
-        bcc
+        from: `"Social Media App 🍰" <${process.env.APP_EMAIL}>`,
+        ...data
     });
     console.log("Message sent:", info.messageId);
 }

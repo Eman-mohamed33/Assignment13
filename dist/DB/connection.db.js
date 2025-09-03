@@ -1,13 +1,12 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-const mongoose_1 = __importDefault(require("mongoose"));
+const mongoose_1 = require("mongoose");
+const User_model_1 = require("./models/User.model");
 const connectDB = async () => {
     try {
-        const URL = process.env.DB_URL || "";
-        const result = await mongoose_1.default.connect(URL, { serverSelectionTimeoutMS: 30000 });
+        const URI = process.env.DB_URL || "";
+        const result = await (0, mongoose_1.connect)(URI, { serverSelectionTimeoutMS: 30000 });
+        User_model_1.UserModel.syncIndexes();
         console.log(result.models);
         console.log("DB Connected Successfully ✅");
     }

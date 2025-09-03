@@ -1,11 +1,12 @@
 
-export const verifyEmailTemplate = ({ otp = "", userEmail = "" } = {}) => {
+
+export const verifyEmailTemplate = ({ otp, userEmail ,title}: { otp: number, userEmail: string,title:string }): string => {
     return `<!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <title>Email Confirmation</title>
+    <title>${title}</title>
 </head>
 
 <body style="margin:0;padding:0;background:#E9D4EC;font-family:Arial, Helvetica, sans-serif;">
@@ -33,7 +34,7 @@ export const verifyEmailTemplate = ({ otp = "", userEmail = "" } = {}) => {
                     <!-- Main content -->
                     <tr>
                         <td style="padding:40px 20px;text-align:center;">
-                            <h1 style="margin:0;font-size:24px;color:#333;">Confirm your Email</h1>
+                            <h1 style="margin:0;font-size:24px;color:#333;">${title}</h1>
                             <p style="margin:16px 0;color:#666;font-size:15px;">
                                 We’ve sent a 6-digit code to <strong>${userEmail}</strong>.
                                 Please enter it below to confirm your email address.

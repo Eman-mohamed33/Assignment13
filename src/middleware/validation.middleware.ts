@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { ZodError, ZodType } from "zod";
 import { BadRequestException } from "../utils/Response/error.response";
 import { z } from "zod";
-import { genderEnum } from "../DB/models/User.model";
+import { GenderEnum } from "../DB/models/User.model";
 
 
 type KeyReqType = keyof Request;
@@ -57,10 +57,12 @@ export const validation = (schema: SchemaType) => {
 };
 
 export const generalFields = {
-    fullName: z.string().min(2).max(20),
+    userName: z.string().min(2).max(20),
     email: z.email(),
     password: z.string().regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$%^&*()_.]).{8,16}$/),
     confirmPassword: z.string(),
-    gender: z.enum(Object.values(genderEnum)),
-    phone: z.string().regex(/^(002|\+2)?01[0125]\d{8}$/)
+    gender: z.enum(Object.values(GenderEnum)),
+    phone: z.string().regex(/^(002|\+2)?01[0125]\d{8}$/),
+    age: z.number(),
+    otp:z.string().regex(/^\d{6}$/)
 };

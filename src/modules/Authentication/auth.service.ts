@@ -1,70 +1,129 @@
 
 import type { Request, Response } from "express";
-import { UserModel } from "../../DB/models/User.model";
-import { emailEvent } from "../../utils/Events/emai.event";
+import { ProviderEnum, UserModel } from "../../DB/models/User.model";
+import { emailEvent } from "../../utils/Events/email.event";
 import { compareHash, generateHash } from "../../utils/Security/Hash.security";
 import { generateEncryption } from "../../utils/Security/Encryption.security";
 import { customAlphabet } from "nanoid";
-import { generateToken } from "../../utils/Security/token.security";
-import { ApplicationException, NotFoundException } from "../../utils/Response/error.response";
-import { ILoginInputsBodyDTO, ISignupInputsBodyDTO } from "./auth.dto";
+import { createLoginCredentials } from "../../utils/Security/token.security";
+import { BadRequestException, conflictException, NotFoundException } from "../../utils/Response/error.response";
+import { IConfirmEmailInputsBodyDTO, ILoginInputsBodyDTO, IResetNewPasswordInputBodyDTO, ISendForgotPasswordCodeInputBodyDTO, ISignupInputsBodyDTO, ISignupOrLoginInputBodyDTO, IVerifyForgotPasswordCodeInputBodyDTO } from "./auth.dto";
+import { UserRepository } from "../../DB/Repository/User.repository";
+import {OAuth2Client, TokenPayload} from 'google-auth-library';
+import { generateOtp } from "../../utils/Security/Otp";
+
+
 
 
 class AuthenticationService {
+    private userModel = new UserRepository(UserModel);
+
+    private async verifyGmailAccount(idToken: string): Promise<TokenPayload> {
+     
+        const client = new OAuth2Client();
+
+        const ticket = await client.verifyIdToken({
+            idToken,
+            audience: process.env.WEB_CLIENT_IDs?.split(",") || [],
+        });
+        const payload = ticket.getPayload();
+        if (!payload?.email_verified) {
+            throw new BadRequestException("Fail to verify this google Account");
+        }
+        return payload;
+    }
     constructor() { }
+
+    /**
+     * 
+     * @param req 
+     * body {fullName,email,password,gender,phone};
+     * @param res 
+     * 201
+     * message="Done"
+     * 
+     */
+
+    signup = async (req: Request, res: Response): Promise<Response> => {
+      
+        const { userName, email, password, phone, gender, age }: ISignupInputsBodyDTO = req.body;
+
+        const UserExist = await this.userModel.findOne({ filter: { email } });
+            
+            
+        if (UserExist) {
+            throw new conflictException("User is Already Exist");
+        }
+        const otp = customAlphabet("0123456789", 6)();
+
+
+        const hashPassword = await generateHash(password);
+        const encPhone = await generateEncryption({ plainText: phone });
+        const confirmEmailOtp = await generateHash(otp);
+
+        const user = await this.userModel.createUser({
+            data: [{
+                userName
+                , email
+                , password: hashPassword
+                , phone: encPhone,
+                gender,
+                age,
+                confirmEmailOtp: {
+                    value: confirmEmailOtp,
+                    attempts: 0,
+                    expiredAt: new Date(Date.now() + 2 * 60 * 1000)
+                }
+            }]
+        });
+        
+        if (!user) {
+            throw new BadRequestException("Fail to create new user");
+        }
+        emailEvent.emit("confirmEmail", { to: email, otp: otp, userEmail: email });
+        return res.status(201).json({ message: "Done", data: { user } });
+        
+        
+    }
 
 /**
  * 
  * @param req 
- * body {fullName,email,password,gender,phone};
+ * body {idToken}
+ * verifyGmailAccount {email, picture, family_name, given_name}
  * @param res 
- * 201
+ * 201 
  * message="Done"
- * 
  */
-
-    signup = async (req: Request, res: Response): Promise<Response> => {
-        try {
-
-            const { fullName, email, password, phone, gender }: ISignupInputsBodyDTO = req.body;
-            const UserExist = await UserModel.findOne({ email });
-
-            const otp = customAlphabet("0123456789", 6)();
-            if (UserExist) {
-                res.status(409).json({ message: "Email Already Exist" });
-                // throw new ApplicationException("Email Already Exist", 409, {
-                //     cause: {
-                //         extra: "jk"
-                //     }
-                // });
+    signupWithGmail = async (req: Request, res: Response): Promise<Response> => {
+        const { idToken }: ISignupOrLoginInputBodyDTO = req.body;
+        const { email, picture, family_name, given_name } = await this.verifyGmailAccount(idToken);
+        const checkUserExist = await this.userModel.findOne({
+            filter: { email }
+        });
+        if (checkUserExist) {
+            if (checkUserExist.provider === ProviderEnum.google) {
+                await this.loginWithGmail(req, res);
             }
-
-            const hashPassword = await generateHash({ plainText: password });
-            const encPhone = await generateEncryption({ plainText: phone });
-            const confirmEmailOtp = await generateHash({ plainText: otp });
-
-            const user = await UserModel.create(
-                {
-                    fullName
-                    , email
-                    , password: hashPassword
-                    , phone: encPhone,
-                    gender,
-                    confirmEmailOtp: {
-                        value: confirmEmailOtp,
-                        attempts: 0,
-                        expiredAt: Date.now() + 2 * 60 * 1000
-                    }
-                });
-            
-            emailEvent.emit("confirmEmail", { to: email, otp: otp, userEmail: email });
-            return res.status(201).json({ message: "Done", data: { user } });
-        
-        } catch (error) {
-            throw new ApplicationException("fail", 500, { cause: error });
+            throw new conflictException("User already Exist");
         }
-    }
 
+        const [user] = await this.userModel.create({
+            data: [{
+                firstName: given_name as string,
+                lastName: family_name as string,
+                email: email as string,
+                profileImage: picture as string,
+                confirmEmail: new Date(),
+                provider: ProviderEnum.google,
+                
+            }],
+        }) || [];
+        if (!user) {
+            throw new BadRequestException("Fail to signup with gmail please try again...");
+        }
+        return res.status(201).json({ message: "Done" });
+    }
 
     /**
      * 
@@ -76,110 +135,123 @@ class AuthenticationService {
      * 
      */
     login = async (req: Request, res: Response): Promise<Response> => {
-        try {
+        
             const { email, password }: ILoginInputsBodyDTO = req.body;
-            const UserExist = await UserModel.findOne({ email });
+            const UserExist = await this.userModel.findOne({
+                filter: { email }
+            });
             if (!UserExist) {
-                //res.status(404).json({ message: "Invalid Login Data" });
                 throw new NotFoundException("Invalid Login Data");
             }
 
             if (!UserExist?.confirmEmail) {
-                res.status(400).json({ message: "Please Verify Your Account First" });
+                throw new BadRequestException("Please Verify Your Account First");
             }
 
-            const match = await compareHash({ plainText: password, hashValue: UserExist?.password });
+            const match = await compareHash(password, UserExist?.password);
 
             if (!match) {
-                return res.status(404).json({ message: "Invalid Login Data" });
+                throw new NotFoundException("Invalid Login Data");
             }
            
-            const access_token = await generateToken({
-                payLoad: { _id: UserExist?._id },
-                signature: "kfldfkcrdklfcl5",
-                options: {
-                    expiresIn: 1800
-                }
-            });
+            const credentials = await createLoginCredentials(UserExist);
 
-            const refresh_token = await generateToken({
-                payLoad: { _id: UserExist?._id },
-                signature: "kfldfuyttykcrdklfcl5",
-                options: {
-                    expiresIn: 31536000
-                }
-            });
-
-            return res.json({ message: "Done", data: { access_token, refresh_token } });
+            return res.json({ message: "Done", data: { credentials } });
         
-        } catch (error) {
-            throw new ApplicationException("fail", 500, { cause: error });
-        }
+        
     }
 
-/**
- * 
- * @param req 
- * body {email,otp}
- * @param res 
- * 200
- * message="Done"
- */
-    confirmEmail = async (req: Request, res: Response): Promise<Response> => {
-        try {
-            
-            const { email, otp } = req.body;
 
-            const UserExist = await UserModel.findOne({
+    /**
+     * 
+     * @param req 
+     * body {idToken}
+     * verifyGmailAccount {email}
+     * @param res 
+     * 200
+     * data : {credentials}
+     * @returns 
+     */
+    loginWithGmail = async (req: Request, res: Response): Promise<Response> => {
+        const { idToken }: ISignupOrLoginInputBodyDTO = req.body;
+        const { email } = await this.verifyGmailAccount(idToken);
+        const user = await this.userModel.findOne({
+            filter: { email, provider: ProviderEnum.google }
+        });
+        if (!user) {
+            throw new NotFoundException("User Not Exist");
+        }
+
+        const credentials = await createLoginCredentials(user);
+        return res.status(201).json({ message: "Done", data: { credentials } });
+    }
+
+    /**
+     * 
+     * @param req 
+     * body {email,otp}
+     * @param res 
+     * 200
+     * message="Done"
+     */
+    confirmEmail = async (req: Request, res: Response): Promise<Response> => {
+        const { email, otp }: IConfirmEmailInputsBodyDTO = req.body;
+
+        const UserExist = await this.userModel.findOne({
+            filter: {
                 email,
                 confirmEmail: { $exists: false },
                 confirmEmailOtp: { $exists: true }
-            });
-            if (!UserExist) {
-                return res.status(404).json({ message: "In-valid Account Or Already Verified" });
             }
-            const banUntil = UserExist.confirmEmailOtp.banUntil?.getTime() ?? 0;
-            console.log(banUntil);
+        });
+        if (!UserExist) {
+            throw new NotFoundException("In-valid Account Or Already Verified");
+        }
+        const banUntil = UserExist?.confirmEmailOtp?.banUntil?.getTime() ?? 0;
+        console.log(banUntil);
 
-            const waitTime = (banUntil - Date.now()) / 1000;
+        const waitTime = (banUntil - Date.now()) / 1000;
 
-            if ((banUntil) && (banUntil > Date.now())) {
-                return res.status(400).json({ message: `You're Temporarily Banned ,Try Again After ${waitTime} seconds` });
-            }
+        if ((banUntil) && (banUntil > Date.now())) {
+            throw new BadRequestException(`You're Temporarily Banned ,Try Again After ${waitTime} seconds`);
+        }
 
-            if ((Date.now() - (UserExist.confirmEmailOtp.expiredAt?.getTime() ?? 0)) > 2 * 60 * 1000) {
-                return res.status(400).json({ message: "Code Expired ,You Need To Request A New one" });
-            }
+        if ((Date.now() - (UserExist?.confirmEmailOtp?.expiredAt?.getTime() ?? 0)) > 2 * 60 * 1000) {
+            throw new BadRequestException("Code Expired ,You Need To Request A New one");
+        }
 
-            if (UserExist?.confirmEmailOtp.attempts === 5) {
-                await UserModel.updateOne({ email }, {
+        if (UserExist?.confirmEmailOtp?.attempts === 5) {
+            await this.userModel.updateOne({
+                filter: { email },
+                update: {
                     'confirmEmailOtp.banUntil': Date.now() + 5 * 60 * 1000,
-                    $inc: { __v: 1 }
-                });
+                }
+            });
 
-                return res.status(400).json({ message: "Too Many Failed Attempts ,You're Temporarily Banned For 5 Minutes" });
-            }
+            throw new BadRequestException("Too Many Failed Attempts ,You're Temporarily Banned For 5 Minutes");
+        }
 
-            if (!await compareHash({ plainText: otp, hashValue: UserExist?.confirmEmailOtp.value })) {
-                await UserModel.updateOne({ email }, {
-                    $inc: { 'confirmEmailOtp.attempts': 1, __v: 1 }
-                });
-                return res.status(400).json({ message: "In-Valid Otp" });
+        if (!await compareHash(otp, UserExist?.confirmEmailOtp?.value as string)) {
+            await this.userModel.updateOne({
+                filter: { email },
+                update: {
+                    $inc: { 'confirmEmailOtp.attempts': 1 }
+                }
+            });
+            throw new BadRequestException("In-Valid Otp");
 
-            }
-            const user = await UserModel.updateOne({email},{
+        }
+        const user = await this.userModel.updateOne({
+            filter: { email },
+            update: {
                 confirmEmail: Date.now(),
                 $unset: { confirmEmailOtp: true },
-                $inc: { __v: 1 }
-            });
+            }
+        });
 
-            return res.json({ message: "Done", data: { user } });
+        return res.json({ message: "Done", data: { user } });
         
-        } catch (error) {
-            throw new ApplicationException("fail", 500, { cause: error });
-        }
     }
-
 
     /**
      * 
@@ -191,31 +263,34 @@ class AuthenticationService {
      * 
      */
     resendConfirmationEmail = async (req: Request, res: Response): Promise<Response> => {
-        try {
-            const { email } = req.body;
-            const UserExist = await UserModel.findOne({
+      
+        const { email } = req.body;
+        const UserExist = await this.userModel.findOne({
+            filter: {
                 email,
                 confirmEmail: { $exists: false },
                 confirmEmailOtp: { $exists: true }
-            });
-            if (!UserExist) {
-                return res.status(404).json({ message: "In-valid Account Or Already Verified" });
             }
+        });
+        if (!UserExist) {
+            throw new NotFoundException("In-valid Account Or Already Verified");
+        }
             
-            const otp = customAlphabet("0123456789", 6)();
-            const confirmEmailOtp = await generateHash({ plainText: otp });
+        const otp = customAlphabet("0123456789", 6)();
+        const confirmEmailOtp = await generateHash(otp);
 
             
 
-            const banUntil = UserExist.confirmEmailOtp.banUntil?.getTime() ?? 0;
-             const waitTime = (banUntil - Date.now()) / 1000;
+        const banUntil = UserExist?.confirmEmailOtp?.banUntil?.getTime() ?? 0;
+        const waitTime = (banUntil - Date.now()) / 1000;
 
-            if ((banUntil) && (banUntil > Date.now())) {
-                return res.status(400).json({ message: `You're Temporarily Banned ,Try Again After ${waitTime} seconds` });
-            }
+        if ((banUntil) && (banUntil > Date.now())) {
+            throw new BadRequestException(`You're Temporarily Banned ,Try Again After ${waitTime} seconds`);
+        }
 
-            emailEvent.emit("confirmEmail", { to: email, otp: otp, userEmail: email });
-            const user = await UserModel.updateOne({ email }, {
+        emailEvent.emit("confirmEmail", { to: email, otp: otp, userEmail: email });
+        const user = await this.userModel.updateOne({
+            filter: { email }, update: {
                 $set: {
                     'confirmEmailOtp.value': confirmEmailOtp,
                     'confirmEmailOtp.attempt': 0,
@@ -223,21 +298,123 @@ class AuthenticationService {
                 },
                 $unset: { 'confirmEmailOtp.banUntil': 1 },
                 $inc: { __v: 1 }
-            });
+            }
+        });
 
-            return res.json({ message: "Done", data: { user } });
-        
-        } catch (error) {
-            throw new ApplicationException("fail", 500, { cause: error });
-        }
+        return res.json({ message: "Done", data: { user } });
     }
 
+    /**
+     * 
+     * @param req 
+     * body  {email}
+     * @param res 
+     * send otpCode 
+     * @returns 
+     */
+    findYourAccount_sendForgotPasswordCode = async (req: Request, res: Response): Promise<Response> => {
+        const { email }: ISendForgotPasswordCodeInputBodyDTO = req.body;
+
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                provider: ProviderEnum.system,
+                confirmEmail: { $exists: true },
+                
+            }
+        });
+
+        if (!user) {
+            throw new NotFoundException("In-valid Account due to one of the following reasons [not register ,not confirmed ,invalid provider]");
+        }
+
+        const otp = generateOtp();
+
+        const updatedUser = await this.userModel.updateOne({
+            filter: { email },
+            update: {
+                resetPasswordOtp: await generateHash(String(otp))
+            }
+        })
+        if (!updatedUser.matchedCount) {
+            throw new BadRequestException("Fail to send the reset code please try again later");
+        }
+
+        emailEvent.emit("SendForgotPasswordCode", { to: email, otp });
+        return res.json({ message: `We Sent Your Code To ${email} , Please Check Your Email ✅` });
+    }
+
+    verifyForgotPasswordCode = async (req: Request, res: Response): Promise<Response> => {
+        const { email, otp }: IVerifyForgotPasswordCodeInputBodyDTO = req.body;
+
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                provider: ProviderEnum.system,
+                resetPasswordOtp: { $exists: true },
+                
+            }
+        });
+
+        if (!user) {
+            throw new NotFoundException("In-valid Account due to one of the following reasons [not register ,not confirmed ,invalid provider]");
+        }
+
+        if (!await compareHash(otp, user.resetPasswordOtp as string)) {
+            throw new NotFoundException("Invalid Otp");
+        }
+
+        return res.json({ message: `Done` });
+    }
+
+    /**
+     * 
+     * @param req 
+     * body { email,otp, password }
+     * @param res 
+     * message:"Done"
+     * @returns 
+     */
+    resetYourPassword = async (req: Request, res: Response): Promise<Response> => {
+        const { email,otp, password }: IResetNewPasswordInputBodyDTO = req.body;
+
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                provider: ProviderEnum.system,
+                resetPasswordOtp: { $exists: true },
+                
+            }
+        });
+
+        if (!user) {
+            throw new NotFoundException("In-valid Account due to one of the following reasons [not register ,not confirmed ,invalid provider]");
+        }
+
+        if (!await compareHash(otp, user.resetPasswordOtp as string)) {
+            throw new NotFoundException("Invalid Otp");
+        }
+        
+        const updatedUser = await this.userModel.updateOne({
+            filter: { email },
+            update: {
+                password: await generateHash(password),
+                $unset: { resetPasswordOtp: 1 },
+                changeCredentialsTime: new Date()
+            }
+        });
+
+        if (!updatedUser.matchedCount) {
+            throw new BadRequestException("Fail to reset password please try again later");
+        }
+
+        return res.json({ message: `Your Password is Reset` });
+    }
 }
 
-
-
-
 export default new AuthenticationService();
+
+
 
 
 

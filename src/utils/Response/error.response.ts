@@ -28,6 +28,23 @@ export class NotFoundException extends ApplicationException  {
     }
 };
 
+export class unAuthorizedException extends ApplicationException  {
+ constructor(message: string,   cause?: unknown) {
+        super(message, 401, cause);
+    }
+};
+
+export class forbiddenException extends ApplicationException  {
+ constructor(message: string,   cause?: unknown) {
+        super(message, 403, cause);
+    }
+};
+export class conflictException extends ApplicationException  {
+ constructor(message: string,   cause?: unknown) {
+        super(message, 409, cause);
+    }
+};
+
 export const globalErrorHandling = (
     error: IError,
     req: Request,

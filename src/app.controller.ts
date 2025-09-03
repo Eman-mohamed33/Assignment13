@@ -11,6 +11,7 @@ import { rateLimit } from "express-rate-limit";
 import connectDB from "./DB/connection.db";
 
 import authController from "./modules/Authentication/auth.controller";
+import userController from "./modules/User/user.controller";
 import { globalErrorHandling } from "./utils/Response/error.response";
 
 const limiter = rateLimit({
@@ -19,11 +20,15 @@ const limiter = rateLimit({
     message: { error: "Too Many Failed Requests ,Please Try Again later ❗" }
 })
 
-const bootstrap = (): void => {
+const bootstrap = async (): Promise<void> => {
     const app: Express = express();
     const port: number | string = process.env.PORT || 5000;
+
+    
     //DB
-     connectDB();
+    await connectDB();
+
+
     app.use(cors());
     app.use(helmet());
     app.use(limiter);
@@ -37,6 +42,7 @@ const bootstrap = (): void => {
     })
 
     app.use("/auth", authController);
+    app.use("/user", userController);
 
     app.use("{/*dummy}", (req: Request, res: Response) => {
         res.status(404).json({ message: "In-Valid Application Routing ❌" });
@@ -49,7 +55,7 @@ const bootstrap = (): void => {
         console.log(`Server Is Running On Port ::: ${port}`);
     })
 
-}
+};
 
 export default bootstrap;
 
