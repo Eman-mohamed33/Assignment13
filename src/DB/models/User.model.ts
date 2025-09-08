@@ -50,7 +50,14 @@ export interface IUser {
 
     provider: ProviderEnum;
     profileImage?: string;
+    tempOldProfileImage?:string
     profileCoverImages?: string[];
+
+
+    deletedAt?: Date;
+    deletedBy?: Types.ObjectId;
+    restoredAt?: Date,
+    restoredBy?: Types.ObjectId;
 
 };
 
@@ -124,7 +131,13 @@ const userSchema = new Schema<IUser>({
     },
   
     profileImage: String,
-    profileCoverImages: [String]
+    tempOldProfileImage:String,
+    profileCoverImages: [String],
+
+    deletedAt: Date,
+    deletedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    restoredAt: Date,
+    restoredBy: { type: Schema.Types.ObjectId, ref: "User" },
 
 },
     {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LogoutEnum } from "../../utils/Security/token.security";
+import { Types } from "mongoose";
 
 export const logout = {
     body: z.strictObject({
@@ -7,3 +8,31 @@ export const logout = {
     })
     
 }
+
+export const freezeAccount = {
+    params: z.object({
+        userId: z.string().optional()
+    }).optional().refine((data) => {
+        return data?.userId ? Types.ObjectId.isValid(data.userId) : true;
+    }, {
+        error: "Invalid ObjectId Format",
+        path: ["userId"]
+    }),
+    
+}
+
+export const restoreAccount = {
+    params: z.object({
+        userId: z.string(),
+    }).refine((data) => {
+        return Types.ObjectId.isValid(data.userId);
+    }, {
+        error: "Invalid ObjectId Format",
+        path: ["userId"]
+    }),
+    
+}
+
+export const hardDelete = restoreAccount;
+
+export const shareProfile = restoreAccount;

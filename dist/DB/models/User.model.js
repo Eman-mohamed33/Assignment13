@@ -83,7 +83,12 @@ const userSchema = new mongoose_1.Schema({
         type: Number
     },
     profileImage: String,
-    profileCoverImages: [String]
+    tempOldProfileImage: String,
+    profileCoverImages: [String],
+    deletedAt: Date,
+    deletedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
+    restoredAt: Date,
+    restoredBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
 }, {
     timestamps: true,
     toJSON: { virtuals: true },

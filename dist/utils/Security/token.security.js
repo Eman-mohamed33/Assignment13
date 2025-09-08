@@ -110,9 +110,6 @@ const decodeToken = async ({ authorization, tokenType = TokenEnum.access }) => {
     if (!user) {
         throw new error_response_1.BadRequestException("User not Registered");
     }
-    if (user.changeCredentialsTime?.getTime() || 0 > decoded.iat * 1000) {
-        throw new error_response_1.unAuthorizedException("Invalid or Old Login Credentials");
-    }
     return { user, decoded };
 };
 exports.decodeToken = decodeToken;

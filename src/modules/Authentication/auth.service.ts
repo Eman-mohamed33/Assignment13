@@ -11,6 +11,8 @@ import { IConfirmEmailInputsBodyDTO, ILoginInputsBodyDTO, IResetNewPasswordInput
 import { UserRepository } from "../../DB/Repository/User.repository";
 import {OAuth2Client, TokenPayload} from 'google-auth-library';
 import { generateOtp } from "../../utils/Security/Otp";
+import { successResponse } from "../../utils/Response/success.response";
+import { ILoginResponse } from "./auth.entities";
 
 
 
@@ -81,8 +83,8 @@ class AuthenticationService {
             throw new BadRequestException("Fail to create new user");
         }
         emailEvent.emit("confirmEmail", { to: email, otp: otp, userEmail: email });
-        return res.status(201).json({ message: "Done", data: { user } });
-        
+
+        return successResponse({ res, statusCode: 201 });
         
     }
 
@@ -122,7 +124,7 @@ class AuthenticationService {
         if (!user) {
             throw new BadRequestException("Fail to signup with gmail please try again...");
         }
-        return res.status(201).json({ message: "Done" });
+        return successResponse({ res, statusCode: 201 });
     }
 
     /**
@@ -156,9 +158,8 @@ class AuthenticationService {
            
             const credentials = await createLoginCredentials(UserExist);
 
-            return res.json({ message: "Done", data: { credentials } });
-        
-        
+        return successResponse<ILoginResponse>({ res, statusCode: 201, data: { credentials } });
+
     }
 
 
@@ -183,7 +184,8 @@ class AuthenticationService {
         }
 
         const credentials = await createLoginCredentials(user);
-        return res.status(201).json({ message: "Done", data: { credentials } });
+        return successResponse<ILoginResponse>({ res, data: { credentials }, statusCode: 201 });
+
     }
 
     /**
@@ -249,7 +251,10 @@ class AuthenticationService {
             }
         });
 
-        return res.json({ message: "Done", data: { user } });
+        if (!user) {
+            throw new BadRequestException("Fail to confirm user Email");
+        }
+        return successResponse({ res });
         
     }
 
@@ -300,8 +305,11 @@ class AuthenticationService {
                 $inc: { __v: 1 }
             }
         });
-
-        return res.json({ message: "Done", data: { user } });
+        if (!user) {
+            throw new BadRequestException("Fail to resend confirm Email");
+        }
+        return successResponse({ res });
+        
     }
 
     /**
@@ -341,7 +349,7 @@ class AuthenticationService {
         }
 
         emailEvent.emit("SendForgotPasswordCode", { to: email, otp });
-        return res.json({ message: `We Sent Your Code To ${email} , Please Check Your Email ✅` });
+        return successResponse({ res, message: `We Sent Your Code To ${email} , Please Check Your Email ✅` });
     }
 
     verifyForgotPasswordCode = async (req: Request, res: Response): Promise<Response> => {
@@ -364,7 +372,7 @@ class AuthenticationService {
             throw new NotFoundException("Invalid Otp");
         }
 
-        return res.json({ message: `Done` });
+        return successResponse({ res });
     }
 
     /**
@@ -408,7 +416,7 @@ class AuthenticationService {
             throw new BadRequestException("Fail to reset password please try again later");
         }
 
-        return res.json({ message: `Your Password is Reset` });
+        return successResponse({ res, message: `Your Password is Reset` });
     }
 }
 

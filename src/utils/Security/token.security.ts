@@ -151,9 +151,9 @@ export const decodeToken = async ({
         throw new BadRequestException("User not Registered");
     }
     
-    if (user.changeCredentialsTime?.getTime() || 0 > decoded.iat * 1000) {
-        throw new unAuthorizedException("Invalid or Old Login Credentials");
-    }
+    // if (user.changeCredentialsTime?.getTime() || 0 > decoded.iat * 1000) {
+    //     throw new unAuthorizedException("Invalid or Old Login Credentials");
+    // }
     return { user, decoded };
 }
 

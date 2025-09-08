@@ -10,6 +10,7 @@ const error_response_1 = require("../../utils/Response/error.response");
 const User_repository_1 = require("../../DB/Repository/User.repository");
 const google_auth_library_1 = require("google-auth-library");
 const Otp_1 = require("../../utils/Security/Otp");
+const success_response_1 = require("../../utils/Response/success.response");
 class AuthenticationService {
     userModel = new User_repository_1.UserRepository(User_model_1.UserModel);
     async verifyGmailAccount(idToken) {
@@ -54,7 +55,7 @@ class AuthenticationService {
             throw new error_response_1.BadRequestException("Fail to create new user");
         }
         email_event_1.emailEvent.emit("confirmEmail", { to: email, otp: otp, userEmail: email });
-        return res.status(201).json({ message: "Done", data: { user } });
+        return (0, success_response_1.successResponse)({ res, statusCode: 201 });
     };
     signupWithGmail = async (req, res) => {
         const { idToken } = req.body;
@@ -81,7 +82,7 @@ class AuthenticationService {
         if (!user) {
             throw new error_response_1.BadRequestException("Fail to signup with gmail please try again...");
         }
-        return res.status(201).json({ message: "Done" });
+        return (0, success_response_1.successResponse)({ res, statusCode: 201 });
     };
     login = async (req, res) => {
         const { email, password } = req.body;
@@ -99,7 +100,7 @@ class AuthenticationService {
             throw new error_response_1.NotFoundException("Invalid Login Data");
         }
         const credentials = await (0, token_security_1.createLoginCredentials)(UserExist);
-        return res.json({ message: "Done", data: { credentials } });
+        return (0, success_response_1.successResponse)({ res, statusCode: 201, data: { credentials } });
     };
     loginWithGmail = async (req, res) => {
         const { idToken } = req.body;
@@ -111,7 +112,7 @@ class AuthenticationService {
             throw new error_response_1.NotFoundException("User Not Exist");
         }
         const credentials = await (0, token_security_1.createLoginCredentials)(user);
-        return res.status(201).json({ message: "Done", data: { credentials } });
+        return (0, success_response_1.successResponse)({ res, data: { credentials }, statusCode: 201 });
     };
     confirmEmail = async (req, res) => {
         const { email, otp } = req.body;
@@ -159,7 +160,10 @@ class AuthenticationService {
                 $unset: { confirmEmailOtp: true },
             }
         });
-        return res.json({ message: "Done", data: { user } });
+        if (!user) {
+            throw new error_response_1.BadRequestException("Fail to confirm user Email");
+        }
+        return (0, success_response_1.successResponse)({ res });
     };
     resendConfirmationEmail = async (req, res) => {
         const { email } = req.body;
@@ -192,7 +196,10 @@ class AuthenticationService {
                 $inc: { __v: 1 }
             }
         });
-        return res.json({ message: "Done", data: { user } });
+        if (!user) {
+            throw new error_response_1.BadRequestException("Fail to resend confirm Email");
+        }
+        return (0, success_response_1.successResponse)({ res });
     };
     findYourAccount_sendForgotPasswordCode = async (req, res) => {
         const { email } = req.body;
@@ -217,7 +224,7 @@ class AuthenticationService {
             throw new error_response_1.BadRequestException("Fail to send the reset code please try again later");
         }
         email_event_1.emailEvent.emit("SendForgotPasswordCode", { to: email, otp });
-        return res.json({ message: `We Sent Your Code To ${email} , Please Check Your Email ✅` });
+        return (0, success_response_1.successResponse)({ res, message: `We Sent Your Code To ${email} , Please Check Your Email ✅` });
     };
     verifyForgotPasswordCode = async (req, res) => {
         const { email, otp } = req.body;
@@ -234,7 +241,7 @@ class AuthenticationService {
         if (!await (0, Hash_security_1.compareHash)(otp, user.resetPasswordOtp)) {
             throw new error_response_1.NotFoundException("Invalid Otp");
         }
-        return res.json({ message: `Done` });
+        return (0, success_response_1.successResponse)({ res });
     };
     resetYourPassword = async (req, res) => {
         const { email, otp, password } = req.body;
@@ -262,7 +269,7 @@ class AuthenticationService {
         if (!updatedUser.matchedCount) {
             throw new error_response_1.BadRequestException("Fail to reset password please try again later");
         }
-        return res.json({ message: `Your Password is Reset` });
+        return (0, success_response_1.successResponse)({ res, message: `Your Password is Reset` });
     };
 }
 exports.default = new AuthenticationService();

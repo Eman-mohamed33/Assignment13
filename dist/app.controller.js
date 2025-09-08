@@ -14,6 +14,10 @@ const connection_db_1 = __importDefault(require("./DB/connection.db"));
 const auth_controller_1 = __importDefault(require("./modules/Authentication/auth.controller"));
 const user_controller_1 = __importDefault(require("./modules/User/user.controller"));
 const error_response_1 = require("./utils/Response/error.response");
+const node_stream_1 = require("node:stream");
+const node_util_1 = require("node:util");
+const S3_config_1 = require("./utils/Multer/S3.config");
+const createS3WriteStream = (0, node_util_1.promisify)(node_stream_1.pipeline);
 const limiter = (0, express_rate_limit_1.rateLimit)({
     windowMs: 60 * 60000,
     limit: 2000,
@@ -32,6 +36,19 @@ const bootstrap = async () => {
     });
     app.use("/auth", auth_controller_1.default);
     app.use("/user", user_controller_1.default);
+    app.get("/upload/*path", async (req, res) => {
+        const { path } = req.params;
+        if (!path?.length) {
+            throw new error_response_1.BadRequestException("");
+        }
+        const key = path?.join("/");
+        const s3Response = await (0, S3_config_1.getFile)({ Key: key });
+        if (!s3Response?.Body) {
+            throw new error_response_1.BadRequestException("Fail to fetch this resource");
+        }
+        res.setHeader("Content-Type", s3Response.ContentType || "application/octet-stream");
+        return await createS3WriteStream(s3Response.Body, res);
+    });
     app.use("{/*dummy}", (req, res) => {
         res.status(404).json({ message: "In-Valid Application Routing ❌" });
     });
