@@ -1,17 +1,21 @@
 import type { Request, Response } from "express";
-import { IFreezeAccountParamsDto, IHardDeleteAccountParamsDto, ILogoutBodyDto, IRestoreAccountParamsDto, IShareProfileParamsDto } from "./user.dto";
+import { IFreezeAccountParamsDto, IHardDeleteAccountParamsDto, ILogoutBodyDto, IRestoreAccountParamsDto, IShareProfileParamsDto, IUpdateBasicInfoBodyDto, IUpdateEmailBodyDto, IUpdatePasswordBodyDto } from "./user.dto";
 import { Types, UpdateQuery } from "mongoose";
 import { HUserDocument, IUser, RoleEnum, UserModel } from "../../DB/models/User.model";
 import { createLoginCredentials, createRevokeToken, LogoutEnum } from "../../utils/Security/token.security";
-import { UserRepository } from "../../DB/Repository/User.repository";
+import { UserRepository } from "../../DB/Repository";
 import { JwtPayload } from "jsonwebtoken";
 import { deleteFiles, deleteFolderByPrefix, preUploadSignedUrl, uploadFilesOrLargeFiles } from "../../utils/Multer/S3.config";
 import { StorageEnum } from "../../utils/Multer/cloud.multer";
 import { s3Event } from "../../utils/Events/S3.event";
-import { BadRequestException, forbiddenException, NotFoundException, unAuthorizedException } from "../../utils/Response/error.response";
+import { BadRequestException, conflictException, forbiddenException, NotFoundException, unAuthorizedException } from "../../utils/Response/error.response";
 import { successResponse } from "../../utils/Response/success.response";
 import { ILoginResponse } from "../Authentication/auth.entities";
 import { IProfileImageResponse, IUserResponse } from "./user.entities";
+import { compareHash, generateHash } from "../../utils/Security/Hash.security";
+import { emailEvent } from "../../utils/Events/email.event";
+import { customAlphabet } from "nanoid";
+import { generateEncryption } from "../../utils/Security/Encryption.security";
 
 
 
@@ -226,6 +230,124 @@ class UserService {
         await deleteFolderByPrefix({ path: `users/${userId}` });
 
         return successResponse({ res });
+    }
+
+    updateBasicInfo = async (req: Request, res: Response): Promise<Response> => {
+        const { userName, gender, age, role, phone }: IUpdateBasicInfoBodyDto = req.body;
+       
+        if (userName) {
+            const [firstName, lastName] = req.body.userName.split(" ");
+            req.body.firstName = firstName;
+            req.body.lastName = lastName;
+            delete req.body.userName;
+        }
+
+        const userExist = await this.userModel.findOne({
+            filter: {
+                _id: req.decoded?._id
+            }
+        });
+
+        if (!userExist) {
+            throw new NotFoundException("Account not found");
+        }
+        const user = await this.userModel.updateOne({
+            filter: {
+                _id: req.decoded?._id as Types.ObjectId,
+                confirmEmail: { $exists: true },
+                deletedAt: { $exists: false },
+                deletedBy: { $exists: false }
+            },
+            update: {
+                firstName:req.body.firstName,
+                lastName:req.body.lastName,
+                role,
+                gender,
+                age,
+                phone: await generateEncryption({ plainText: phone })
+            }
+        });
+        if (!user.matchedCount) {
+            throw new BadRequestException("Fail to update your basic information");
+        }
+        return successResponse({ res, statusCode: 201, message: "Basic Info Updated" });
+    }
+
+    updatePassword = async (req: Request, res: Response): Promise<Response> => {
+        const { oldPassword, newPassword }: IUpdatePasswordBodyDto = req.body;
+
+        if (!await compareHash(oldPassword, req.user?.password as string)) {
+            throw new BadRequestException("In-Valid Old Password");
+        }
+
+        const hashPass = await generateHash(newPassword);
+
+        const user = await this.userModel.updateOne({
+            filter: {
+                _id: req.decoded?._id,
+                confirmEmail: { $exists: true },
+                deletedAt: { $exists: false },
+                deletedBy: { $exists: false }
+            },
+            update: {
+                password: hashPass
+            }
+        });
+
+        if (!user) {
+            throw new BadRequestException("Fail to update your password");
+        }
+        return successResponse({ res, message: "Password Updated" });
+    }
+
+    updateEmail = async (req: Request, res: Response): Promise<Response> => {
+        const { oldEmail, newEmail, passwordOfOldEmail }: IUpdateEmailBodyDto = req.body;
+
+        if (oldEmail !== req.user?.email){
+            throw new BadRequestException("In-valid Email");
+        }
+
+        if (!await compareHash(passwordOfOldEmail,req.user?.password)) {
+            throw new BadRequestException("In-valid password ,please try again");
+        }
+
+        const emailExist = await this.userModel.findOne({
+            filter: {
+                email: newEmail
+            }
+        });
+        if (emailExist) {
+            throw new conflictException("Email Already Exist");
+        }
+        const otp = customAlphabet("0123456789", 6)();
+
+         const user = await this.userModel.updateOne({
+            filter: {
+                _id: req.decoded?._id,
+                confirmEmail: { $exists: true },
+                deletedAt: { $exists: false },
+                deletedBy: { $exists: false }
+            },
+            update: {
+                email: newEmail,
+                $unset: {
+                    confirmEmail:1
+                },
+                confirmEmailOtp: {
+                    value: await generateHash(otp),
+                    attempts: 0,
+                    expiredAt: new Date(Date.now() + 2 * 60 * 1000)
+                },
+                changeCredentialsTime: new Date()
+            }
+        });
+
+        if (!user.matchedCount) {
+            throw new BadRequestException("Fail to update your Email");
+        }
+
+        emailEvent.emit("confirmEmail", { to: newEmail, otp, userEmail: newEmail });
+        return successResponse({ res, message: "Email Updated" });
     }
 }
 

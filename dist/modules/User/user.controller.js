@@ -52,6 +52,9 @@ router.post("/refresh-token", (0, authentication_middleware_1.authentication)(to
 router.patch("/profile-Photo", (0, authentication_middleware_1.authentication)(), user_service_1.default.profilePhoto);
 router.patch("/profile-Cover-Photos", (0, authentication_middleware_1.authentication)(), (0, cloud_multer_1.cloudFileUpload)({ validation: cloud_multer_1.fileValidation.image, storageApproach: cloud_multer_1.StorageEnum.disk }).array("photos", 5), user_service_1.default.profileCoverPhotos);
 router.patch("/:userId/restore-Account", (0, authentication_middleware_1.authorization)(user_authorization_1.endPoint.restore), (0, validation_middleware_1.validation)(validators.restoreAccount), user_service_1.default.restoreAccount);
+router.patch("/update-password", (0, authentication_middleware_1.authentication)(), (0, validation_middleware_1.validation)(validators.updatePassword), user_service_1.default.updatePassword);
+router.patch("/update-Personal-Info", (0, authentication_middleware_1.authentication)(), (0, validation_middleware_1.validation)(validators.updateBasicInfo), user_service_1.default.updateBasicInfo);
+router.patch("/update-Email", (0, authentication_middleware_1.authentication)(), (0, validation_middleware_1.validation)(validators.updateEmail), user_service_1.default.updateEmail);
 router.delete("{/:userId}/freeze-Account", (0, authentication_middleware_1.authentication)(), (0, validation_middleware_1.validation)(validators.freezeAccount), user_service_1.default.freezeAccount);
 router.delete("/:userId", (0, authentication_middleware_1.authorization)(user_authorization_1.endPoint.hardDelete), (0, validation_middleware_1.validation)(validators.hardDelete), user_service_1.default.hardDelete);
 exports.default = router;

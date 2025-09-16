@@ -10,13 +10,19 @@ import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 import connectDB from "./DB/connection.db";
 
-import authController from "./modules/Authentication/auth.controller";
-import userController from "./modules/User/user.controller";
+
+import { authRouter, userRouter, postRouter } from "./modules";
+// import { router as authRouter } from "./modules/Authentication";
+// import { router as userRouter } from "./modules/User";
+
+// import authController from "./modules/Authentication/auth.controller";
+// import userController from "./modules/User/user.controller";
 import { BadRequestException, globalErrorHandling } from "./utils/Response/error.response";
 
 import { pipeline } from "node:stream";
 import { promisify } from "node:util";
 import { getFile } from "./utils/Multer/S3.config";
+
 const createS3WriteStream = promisify(pipeline);
 
 const limiter = rateLimit({
@@ -33,7 +39,7 @@ const bootstrap = async (): Promise<void> => {
     //DB
     await connectDB();
 
-
+    // Application-middleware
     app.use(cors());
     app.use(helmet());
     app.use(limiter);
@@ -41,13 +47,15 @@ const bootstrap = async (): Promise<void> => {
     
     app.use(express.json());
 
-    //Routing
+    //App-Routing
     app.get("/", (req: Request, res: Response) => {
         res.json({ message: "Welcome To Social Media App Backend Landing Page ➰💙" });
     })
 
-    app.use("/auth", authController);
-    app.use("/user", userController);
+    //sub-Routing-modules
+    app.use("/auth", authRouter);
+    app.use("/user", userRouter);
+    app.use("/post", postRouter);
 
     //get-Asset
     app.get("/upload/*path", async (req, res: Response): Promise<void> => {
@@ -103,10 +111,131 @@ const bootstrap = async (): Promise<void> => {
     //     return res.json({ url });
     // });
 
+
+    // test Hook
+    // async function test() {
+    //     try {
+            
+    //         const userModel =new UserRepository(UserModel);
+    //         // const user = await userModel.findOne({
+    //         //     filter: {
+    //         //         gender: GenderEnum.male,
+    //         //         paranoid:false
+    //         //     },
+    //         //     options: {
+    //         //         lean:true
+    //         //     }
+                
+    //         // }) as HUserDocument;
+
+    //         //  const user = await userModel.findById({
+    //         //      id: {
+    //         //          _id: "68c6c11a914de992be7ca35d" as unknown as Types.ObjectId,
+    //         //         paranoid:false
+    //         //     }as unknown as Types.ObjectId,
+                
+    //         // }) as HUserDocument;
+
+    //         // const user = await userModel.find({
+    //         //     filter: {
+    //         //         paranoid:false
+    //         //     },
+    //         //     options: { skip: 0, limit: 1 }
+                
+
+                
+    //         // }) as HUserDocument[];
+    //         // console.log(user);
+    //         // const user = await userModel.updateOne({
+    //         //     filter: {
+    //         //         _id:"68c6f5bc45ce85076ea834bd"
+    //         //     },
+    //         //     update: {
+    //         //         deletedAt: new Date()
+    //         //     }
+    //         // })
+
+    //         //  const user = await userModel.findByIdAndUpdate({
+                
+    //         //      id: "68c6f5bc45ce85076ea834bd" as unknown as Types.ObjectId,
+    //         //     update: {
+    //         //         deletedAt: new Date()
+    //         //     }
+    //         // })
+
+    //         // const user = await userModel.deleteOne({
+    //         //     filter: {
+    //         //         _id: "68c6f5bc45ce85076ea834bd" as unknown as Types.ObjectId,
+        
+    //         //     }
+    //         // });
+
+    //         // const user = await userModel.findOneAndDelete({
+    //         //     filter: {
+    //         //         _id: "68c81467a459bf69482994bf" as unknown as Types.ObjectId,
+        
+    //         //     }
+    //         // });
+
+    //         // const user = await userModel.insertMany({
+    //         //     data: [
+    //         //         {
+    //         //             userName: "mohamed Emad",
+    //         //             email: "eman.gesraha13@gmail.com",
+    //         //             password: "dj486555",
+    //         //             phone: "01065435554",
+    //         //             gender: GenderEnum.male,
+    //         //             age: 21,
+    //         //             confirmEmailOtp: {
+    //         //                 value: "569888",
+    //         //                 attempts: 2,
+    //         //                 expiredAt: new Date()
+    //         //             }
+    //         //         },
+    //         //         {
+    //         //             userName: "Ibra Emad",
+    //         //             email: "gesraha13@gmail.com",
+    //         //             password: "jh10462",
+    //         //             phone: "0125556655",
+    //         //             gender: GenderEnum.male,
+    //         //             age: 21,
+    //         //             confirmEmailOtp: {
+    //         //                 value: "5552555",
+    //         //                 attempts: 0,
+    //         //                 expiredAt: new Date()
+    //         //             }
+    //         //         },
+    //         //         {
+    //         //             userName: "Emad Ges",
+    //         //             email: "_Gesraha55@gmail.com",
+    //         //             password: "aaw85545",
+    //         //             phone: "0112469655",
+    //         //             gender: GenderEnum.male,
+    //         //             age: 40,
+    //         //             confirmEmailOtp: {
+    //         //                 value: "443222",
+    //         //                 attempts: 4,
+    //         //                 expiredAt: new Date()
+    //         //             }
+    //         //         }
+    //         //     ]
+    //         // });
+    //         // console.log({ result: user });
+
+    //     } catch (error) {
+    //         console.log(error);
+    //     }
+        
+    // }
+
+    // test();
+
+    //In-valid router
     app.use("{/*dummy}", (req: Request, res: Response) => {
         res.status(404).json({ message: "In-Valid Application Routing ❌" });
     })
 
+    //global-error-handling
     app.use(globalErrorHandling);
 
 
@@ -120,3 +249,4 @@ export default bootstrap;
 
 
  
+

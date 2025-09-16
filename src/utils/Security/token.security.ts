@@ -2,10 +2,10 @@ import {JwtPayload, Secret,sign, SignOptions, verify} from 'jsonwebtoken';
 import { HUserDocument, RoleEnum, UserModel } from '../../DB/models/User.model';
 import { log } from 'console';
 import { BadRequestException, unAuthorizedException } from '../Response/error.response';
-import { UserRepository } from '../../DB/Repository/User.repository';
+import { UserRepository } from '../../DB/Repository';
 import { nanoid } from 'nanoid';
 import { HTokenDocument, TokenModel } from '../../DB/models/Token.model';
-import { TokenRepository } from '../../DB/Repository/Token.repository';
+import { TokenRepository } from '../../DB/Repository';
 
 export enum SignatureLevelEnum{
     Bearer = "Bearer",

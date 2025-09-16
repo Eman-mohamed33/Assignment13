@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { UserRepository } from "../../DB/Repository/User.repository";
+import { UserRepository } from "../../DB/Repository";
 import { UserModel } from "../../DB/models/User.model";
 import { deleteFile, getFile } from "../Multer/S3.config";
 

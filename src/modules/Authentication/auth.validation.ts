@@ -6,6 +6,7 @@ export const login = {
     body: z.object({
         email: generalFields.email,
         password: generalFields.password,
+        enable2stepVerification: z.boolean().optional(),
     })
 };
 

@@ -3,16 +3,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const User_model_1 = require("../../DB/models/User.model");
 const email_event_1 = require("../../utils/Events/email.event");
 const Hash_security_1 = require("../../utils/Security/Hash.security");
-const Encryption_security_1 = require("../../utils/Security/Encryption.security");
 const nanoid_1 = require("nanoid");
 const token_security_1 = require("../../utils/Security/token.security");
 const error_response_1 = require("../../utils/Response/error.response");
-const User_repository_1 = require("../../DB/Repository/User.repository");
+const Repository_1 = require("../../DB/Repository");
 const google_auth_library_1 = require("google-auth-library");
 const Otp_1 = require("../../utils/Security/Otp");
 const success_response_1 = require("../../utils/Response/success.response");
 class AuthenticationService {
-    userModel = new User_repository_1.UserRepository(User_model_1.UserModel);
+    userModel = new Repository_1.UserRepository(User_model_1.UserModel);
     async verifyGmailAccount(idToken) {
         const client = new google_auth_library_1.OAuth2Client();
         const ticket = await client.verifyIdToken({
@@ -33,19 +32,16 @@ class AuthenticationService {
             throw new error_response_1.conflictException("User is Already Exist");
         }
         const otp = (0, nanoid_1.customAlphabet)("0123456789", 6)();
-        const hashPassword = await (0, Hash_security_1.generateHash)(password);
-        const encPhone = await (0, Encryption_security_1.generateEncryption)({ plainText: phone });
-        const confirmEmailOtp = await (0, Hash_security_1.generateHash)(otp);
         const user = await this.userModel.createUser({
             data: [{
                     userName,
                     email,
-                    password: hashPassword,
-                    phone: encPhone,
+                    password,
+                    phone,
                     gender,
                     age,
                     confirmEmailOtp: {
-                        value: confirmEmailOtp,
+                        value: otp,
                         attempts: 0,
                         expiredAt: new Date(Date.now() + 2 * 60 * 1000)
                     }
@@ -54,7 +50,6 @@ class AuthenticationService {
         if (!user) {
             throw new error_response_1.BadRequestException("Fail to create new user");
         }
-        email_event_1.emailEvent.emit("confirmEmail", { to: email, otp: otp, userEmail: email });
         return (0, success_response_1.successResponse)({ res, statusCode: 201 });
     };
     signupWithGmail = async (req, res) => {
@@ -85,7 +80,7 @@ class AuthenticationService {
         return (0, success_response_1.successResponse)({ res, statusCode: 201 });
     };
     login = async (req, res) => {
-        const { email, password } = req.body;
+        const { email, password, enable2stepVerification } = req.body;
         const UserExist = await this.userModel.findOne({
             filter: { email }
         });
@@ -98,6 +93,9 @@ class AuthenticationService {
         const match = await (0, Hash_security_1.compareHash)(password, UserExist?.password);
         if (!match) {
             throw new error_response_1.NotFoundException("Invalid Login Data");
+        }
+        if (enable2stepVerification) {
+            await this.twoStepVerification(req, res, email);
         }
         const credentials = await (0, token_security_1.createLoginCredentials)(UserExist);
         return (0, success_response_1.successResponse)({ res, statusCode: 201, data: { credentials } });
@@ -270,6 +268,51 @@ class AuthenticationService {
             throw new error_response_1.BadRequestException("Fail to reset password please try again later");
         }
         return (0, success_response_1.successResponse)({ res, message: `Your Password is Reset` });
+    };
+    twoStepVerification = async (req, res, email) => {
+        const otp = (0, nanoid_1.customAlphabet)("0123456", 6)();
+        const user = await this.userModel.updateOne({
+            filter: {
+                email,
+                confirmEmail: { $exists: true },
+                deletedAt: { $exists: false }
+            },
+            update: {
+                stepVerificationOtp: await (0, Hash_security_1.generateHash)(otp),
+            }
+        });
+        if (!user.matchedCount) {
+            throw new error_response_1.BadRequestException("Fail to Apply 2-step-verification");
+        }
+        email_event_1.emailEvent.emit("stepVerification", { to: email, otp });
+        return (0, success_response_1.successResponse)({ res, message: "Otp sent!" });
+    };
+    loginConfirmation = async (req, res) => {
+        const { email, otp } = req.body;
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                stepVerificationOtp: { $exists: true }
+            }
+        });
+        if (!await (0, Hash_security_1.compareHash)(otp, user?.stepVerificationOtp)) {
+            throw new error_response_1.BadRequestException("In-valid Otp ,please try again later ");
+        }
+        await this.userModel.updateOne({
+            filter: {
+                email
+            },
+            update: {
+                $unset: {
+                    stepVerificationOtp: 1
+                }
+            }
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("Invalid Login Data");
+        }
+        const credentials = await (0, token_security_1.createLoginCredentials)(user);
+        return (0, success_response_1.successResponse)({ res, statusCode: 201, data: { credentials } });
     };
 }
 exports.default = new AuthenticationService();

@@ -7,6 +7,7 @@ exports.login = {
     body: zod_1.z.object({
         email: validation_middleware_1.generalFields.email,
         password: validation_middleware_1.generalFields.password,
+        enable2stepVerification: zod_1.z.boolean().optional(),
     })
 };
 exports.signup = {

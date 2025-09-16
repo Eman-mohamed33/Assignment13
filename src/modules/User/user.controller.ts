@@ -20,9 +20,13 @@ router.patch("/profile-Photo", authentication(), userService.profilePhoto);
 router.patch("/profile-Cover-Photos", authentication(), cloudFileUpload({ validation: fileValidation.image, storageApproach: StorageEnum.disk }).array("photos", 5), userService.profileCoverPhotos);
 router.patch("/:userId/restore-Account", authorization(endPoint.restore), validation(validators.restoreAccount), userService.restoreAccount);
 
+router.patch("/update-password", authentication(), validation(validators.updatePassword), userService.updatePassword);
+router.patch("/update-Personal-Info", authentication(), validation(validators.updateBasicInfo), userService.updateBasicInfo);
+router.patch("/update-Email", authentication(), validation(validators.updateEmail), userService.updateEmail);
 
 router.delete("{/:userId}/freeze-Account", authentication(), validation(validators.freezeAccount), userService.freezeAccount);
 router.delete("/:userId", authorization(endPoint.hardDelete), validation(validators.hardDelete), userService.hardDelete);
 
 
 export default router;
+

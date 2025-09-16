@@ -3,16 +3,16 @@ import type { Request, Response } from "express";
 import { ProviderEnum, UserModel } from "../../DB/models/User.model";
 import { emailEvent } from "../../utils/Events/email.event";
 import { compareHash, generateHash } from "../../utils/Security/Hash.security";
-import { generateEncryption } from "../../utils/Security/Encryption.security";
 import { customAlphabet } from "nanoid";
 import { createLoginCredentials } from "../../utils/Security/token.security";
 import { BadRequestException, conflictException, NotFoundException } from "../../utils/Response/error.response";
 import { IConfirmEmailInputsBodyDTO, ILoginInputsBodyDTO, IResetNewPasswordInputBodyDTO, ISendForgotPasswordCodeInputBodyDTO, ISignupInputsBodyDTO, ISignupOrLoginInputBodyDTO, IVerifyForgotPasswordCodeInputBodyDTO } from "./auth.dto";
-import { UserRepository } from "../../DB/Repository/User.repository";
+import { UserRepository } from "../../DB/Repository";
 import {OAuth2Client, TokenPayload} from 'google-auth-library';
 import { generateOtp } from "../../utils/Security/Otp";
 import { successResponse } from "../../utils/Response/success.response";
 import { ILoginResponse } from "./auth.entities";
+
 
 
 
@@ -59,20 +59,20 @@ class AuthenticationService {
         const otp = customAlphabet("0123456789", 6)();
 
 
-        const hashPassword = await generateHash(password);
-        const encPhone = await generateEncryption({ plainText: phone });
-        const confirmEmailOtp = await generateHash(otp);
+        // const hashPassword = await generateHash(password);
+        // const encPhone = await generateEncryption({ plainText: phone });
+        // const confirmEmailOtp = await generateHash(otp);
 
         const user = await this.userModel.createUser({
             data: [{
                 userName
                 , email
-                , password: hashPassword
-                , phone: encPhone,
+                , password
+                , phone,
                 gender,
                 age,
                 confirmEmailOtp: {
-                    value: confirmEmailOtp,
+                    value: otp,
                     attempts: 0,
                     expiredAt: new Date(Date.now() + 2 * 60 * 1000)
                 }
@@ -82,7 +82,7 @@ class AuthenticationService {
         if (!user) {
             throw new BadRequestException("Fail to create new user");
         }
-        emailEvent.emit("confirmEmail", { to: email, otp: otp, userEmail: email });
+        // emailEvent.emit("confirmEmail", { to: email, otp: otp, userEmail: email });
 
         return successResponse({ res, statusCode: 201 });
         
@@ -138,26 +138,32 @@ class AuthenticationService {
      */
     login = async (req: Request, res: Response): Promise<Response> => {
         
-            const { email, password }: ILoginInputsBodyDTO = req.body;
-            const UserExist = await this.userModel.findOne({
-                filter: { email }
-            });
-            if (!UserExist) {
-                throw new NotFoundException("Invalid Login Data");
-            }
+        const { email, password, enable2stepVerification }: ILoginInputsBodyDTO = req.body;
+       
+        const UserExist = await this.userModel.findOne({
+            filter: { email }
+        });
 
-            if (!UserExist?.confirmEmail) {
-                throw new BadRequestException("Please Verify Your Account First");
-            }
+        if (!UserExist) {
+            throw new NotFoundException("Invalid Login Data");
+        }
 
-            const match = await compareHash(password, UserExist?.password);
+        if (!UserExist?.confirmEmail) {
+            throw new BadRequestException("Please Verify Your Account First");
+        }
 
-            if (!match) {
-                throw new NotFoundException("Invalid Login Data");
-            }
-           
-            const credentials = await createLoginCredentials(UserExist);
+        const match = await compareHash(password, UserExist?.password);
 
+        if (!match) {
+            throw new NotFoundException("Invalid Login Data");
+        }
+       
+       
+        if (enable2stepVerification) {
+            await this.twoStepVerification(req, res, email);
+        }
+        
+        const credentials = await createLoginCredentials(UserExist);
         return successResponse<ILoginResponse>({ res, statusCode: 201, data: { credentials } });
 
     }
@@ -417,6 +423,61 @@ class AuthenticationService {
         }
 
         return successResponse({ res, message: `Your Password is Reset` });
+    }
+
+    twoStepVerification = async (req: Request, res: Response, email: string): Promise<Response> => {
+
+        const otp = customAlphabet("0123456", 6)();
+        const user = await this.userModel.updateOne({
+            filter: {
+               email,
+                confirmEmail: { $exists: true },
+                deletedAt: { $exists: false }
+            },
+            update: {
+                stepVerificationOtp: await generateHash(otp),
+
+            }
+        });
+        
+        if (!user.matchedCount) {
+            throw new BadRequestException("Fail to Apply 2-step-verification");
+        }
+        emailEvent.emit("stepVerification", { to: email, otp });
+        return successResponse({ res, message: "Otp sent!" });
+    }
+
+    loginConfirmation = async (req: Request, res: Response): Promise<Response> => {
+        
+        const {email, otp } = req.body;
+        const user = await this.userModel.findOne({
+            filter: {
+                email,
+                stepVerificationOtp: { $exists: true }
+            }
+        });
+
+        if (!await compareHash(otp, user?.stepVerificationOtp as string)) {
+            throw new BadRequestException("In-valid Otp ,please try again later ");
+        }
+
+        await this.userModel.updateOne({
+            filter: {
+                email
+            },
+            update: {
+                $unset: {
+                    stepVerificationOtp: 1
+                }
+            }
+        });
+
+        if (!user) {
+            throw new NotFoundException("Invalid Login Data");
+        }
+        const credentials = await createLoginCredentials(user);
+
+        return successResponse<ILoginResponse>({ res, statusCode: 201, data: { credentials } });
     }
 }
 

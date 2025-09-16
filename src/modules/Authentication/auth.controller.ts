@@ -6,6 +6,7 @@ const router: Router = Router();
 
 router.post("/signup", validation(validators.signup), authService.signup);
 router.post("/login", validation(validators.login), authService.login);
+router.post("/login-confirmation", authService.loginConfirmation);
 
 router.post("/signupWithGmail", validation(validators.gmailValidation), authService.signupWithGmail);
 router.post("/loginWithGmail", validation(validators.gmailValidation), authService.loginWithGmail);
