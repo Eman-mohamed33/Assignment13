@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateBasicInfo = exports.updateEmail = exports.updatePassword = exports.shareProfile = exports.hardDelete = exports.restoreAccount = exports.freezeAccount = exports.logout = void 0;
+exports.blockUser = exports.unfriend = exports.deleteFriendRequest = exports.acceptFriendRequest = exports.sentFriendRequest = exports.changeRole = exports.updateBasicInfo = exports.updateEmail = exports.updatePassword = exports.shareProfile = exports.hardDelete = exports.restoreAccount = exports.freezeAccount = exports.logout = void 0;
 const zod_1 = require("zod");
 const token_security_1 = require("../../utils/Security/token.security");
 const mongoose_1 = require("mongoose");
@@ -23,7 +23,7 @@ exports.freezeAccount = {
 };
 exports.restoreAccount = {
     params: zod_1.z.object({
-        userId: zod_1.z.string(),
+        userId: validation_middleware_1.generalFields.id,
     }).refine((data) => {
         return mongoose_1.Types.ObjectId.isValid(data.userId);
     }, {
@@ -63,5 +63,33 @@ exports.updateBasicInfo = {
         phone: validation_middleware_1.generalFields.phone.optional(),
         age: validation_middleware_1.generalFields.age.optional(),
         role: zod_1.z.enum(User_model_1.RoleEnum).default(User_model_1.RoleEnum.user).optional()
+    }),
+};
+exports.changeRole = {
+    params: zod_1.z.strictObject({
+        userId: validation_middleware_1.generalFields.id
+    }),
+    body: zod_1.z.strictObject({
+        role: zod_1.z.enum(User_model_1.RoleEnum),
+    })
+};
+exports.sentFriendRequest = {
+    params: exports.changeRole.params
+};
+exports.acceptFriendRequest = {
+    params: zod_1.z.strictObject({
+        requestId: validation_middleware_1.generalFields.id
+    }),
+};
+exports.deleteFriendRequest = {
+    params: exports.acceptFriendRequest.params
+};
+exports.unfriend = {
+    params: exports.changeRole.params
+};
+exports.blockUser = {
+    params: exports.unfriend.params,
+    query: zod_1.z.strictObject({
+        action: zod_1.z.enum(User_model_1.BlockActionEnum).default(User_model_1.BlockActionEnum.block),
     }),
 };

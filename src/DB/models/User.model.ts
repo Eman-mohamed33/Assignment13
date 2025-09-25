@@ -6,7 +6,10 @@ import { emailEvent } from "../../utils/Events/email.event";
 //import { emailEvent } from "../../utils/Events/email.event";
 
 
-
+export enum BlockActionEnum {
+    block = "block",
+    unblock = "unblock"
+}
 
 export enum GenderEnum {
     male = "male",
@@ -15,7 +18,8 @@ export enum GenderEnum {
 
 export enum RoleEnum{
     user = "user",
-    admin="admin"
+    admin = "admin",
+    superAdmin = "super-admin",
 };
 
 export enum ProviderEnum{
@@ -67,11 +71,14 @@ export interface IUser {
     deletedBy?: Types.ObjectId;
     restoredAt?: Date,
     restoredBy?: Types.ObjectId;
+   
+    BlockList: Types.ObjectId[];
 
 
     stepVerificationOtp?: string;
     enable2stepVerification?: boolean;
 
+    friends?: Types.ObjectId[];
     extra: {
         name: string;
     };
@@ -161,9 +168,12 @@ const userSchema = new Schema<IUser>({
     restoredAt: Date,
     restoredBy: { type: Schema.Types.ObjectId, ref: "User" },
 
+    BlockList: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    
     stepVerificationOtp: String,
     enable2stepVerification: Boolean,
 
+    friends: [{ type: Schema.Types.ObjectId, ref: "User" }],
     extra: {
         name: String
     },
@@ -375,6 +385,26 @@ userSchema.pre(["find", "findOne"], function (next) {
     }
     next();
 });
+
+
+
+// userSchema.post("findOneAndUpdate", async function (doc, next) {
+//     const user = this.model.findOne({
+    
+//     });
+//     if (t) {
+        
+//     }
+
+//        emailEvent.emit("MentionedYou", {
+//                 to: user.email,
+//                 userName: user.userName,
+//                 Content: doc.content,
+//                 field: "post"
+//             });
+// });
+
+
 
 
 export const UserModel = models.User || model<IUser>("User", userSchema);

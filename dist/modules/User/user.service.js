@@ -12,17 +12,77 @@ const Hash_security_1 = require("../../utils/Security/Hash.security");
 const email_event_1 = require("../../utils/Events/email.event");
 const nanoid_1 = require("nanoid");
 const Encryption_security_1 = require("../../utils/Security/Encryption.security");
+const Post_model_1 = require("../../DB/models/Post.model");
+const FriendRequest_model_1 = require("../../DB/models/FriendRequest.model");
 class UserService {
     userModel = new Repository_1.UserRepository(User_model_1.UserModel);
+    postModel = new Repository_1.PostRepository(Post_model_1.PostModel);
+    friendRequestModel = new Repository_1.FriendRequestRepository(FriendRequest_model_1.FriendRequestModel);
     constructor() { }
     profile = async (req, res) => {
         if (!req.user) {
             throw new error_response_1.unAuthorizedException("Missing user details");
         }
+        const profile = await this.userModel.findOne({
+            filter: {
+                _id: req.user._id
+            },
+            options: {
+                populate: [
+                    {
+                        path: "friends",
+                        select: "firstName lastName email gender age"
+                    }
+                ]
+            },
+        });
+        if (!profile) {
+            throw new error_response_1.NotFoundException("Fail to find this user");
+        }
         return (0, success_response_1.successResponse)({
             res, data: {
-                user: req.user
+                user: profile
             }
+        });
+    };
+    dashboard = async (req, res) => {
+        const result = await Promise.allSettled([
+            this.userModel.find({
+                filter: {}
+            }),
+            this.postModel.find({
+                filter: {}
+            }),
+        ]);
+        return (0, success_response_1.successResponse)({
+            res, data: {
+                result
+            }
+        });
+    };
+    changeRole = async (req, res) => {
+        const { userId } = req.params;
+        const { role } = req.body;
+        const denyRoles = [role, User_model_1.RoleEnum.superAdmin];
+        if (req.user?.role === User_model_1.RoleEnum.admin) {
+            denyRoles.push(User_model_1.RoleEnum.admin);
+        }
+        const user = await this.userModel.findOneAndUpdate({
+            filter: {
+                _id: userId,
+                role: {
+                    $nin: denyRoles
+                }
+            },
+            update: {
+                role
+            }
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("Fail to find matching result");
+        }
+        return (0, success_response_1.successResponse)({
+            res
         });
     };
     shareProfile = async (req, res) => {
@@ -31,7 +91,7 @@ class UserService {
             filter: {
                 _id: userId,
                 confirmEmail: { $exists: true },
-                deletedAt: { $exists: false }
+                deletedAt: { $exists: false },
             }
         });
         if (!user) {
@@ -127,6 +187,15 @@ class UserService {
                 }
             }
         });
+        const posts = await this.postModel.updateMany({
+            filter: {
+                createdBy: userId || req.user?._id
+            },
+            update: {
+                deletedAt: new Date(),
+                deletedBy: req.user?._id,
+            }
+        });
         if (!user.matchedCount) {
             throw new error_response_1.NotFoundException("User not found and Fail to delete this account");
         }
@@ -158,6 +227,13 @@ class UserService {
         const user = await this.userModel.deleteOne({
             filter: {
                 _id: userId,
+                deletedAt: { $exists: true },
+                deletedBy: { $exists: true },
+            }
+        });
+        const posts = await this.userModel.deleteMany({
+            filter: {
+                createdBy: userId,
                 deletedAt: { $exists: true },
                 deletedBy: { $exists: true },
             }
@@ -269,6 +345,201 @@ class UserService {
         }
         email_event_1.emailEvent.emit("confirmEmail", { to: newEmail, otp, userEmail: newEmail });
         return (0, success_response_1.successResponse)({ res, message: "Email Updated" });
+    };
+    sendFriendRequest = async (req, res) => {
+        const { userId } = req.params;
+        if (req.user?.BlockList.includes(userId)) {
+            throw new error_response_1.NotFoundException("You Blocked this user");
+        }
+        const FriendRequestExist = await this.friendRequestModel.findOne({
+            filter: {
+                createdBy: { $in: [req.user?._id, userId] },
+                sendTo: { $in: [req.user?._id, userId] },
+                AcceptedAt: { $exists: false },
+            }
+        });
+        if (FriendRequestExist) {
+            throw new error_response_1.conflictException("Friend Request Already Exist");
+        }
+        const user = await this.userModel.findOne({
+            filter: {
+                _id: userId,
+                BlockList: { $nin: [req.user?._id] }
+            }
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("User not Exist");
+        }
+        const [friendRequest] = (await this.friendRequestModel.create({
+            data: [{
+                    createdBy: req.user?._id,
+                    sendTo: userId,
+                }]
+        })) || [];
+        if (!friendRequest) {
+            throw new error_response_1.BadRequestException("Fail to sent friend request");
+        }
+        return (0, success_response_1.successResponse)({
+            res,
+            statusCode: 201
+        });
+    };
+    acceptFriendRequest = async (req, res) => {
+        const { requestId } = req.params;
+        const FriendRequestExist = await this.friendRequestModel.findOneAndUpdate({
+            filter: {
+                _id: requestId,
+                AcceptedAt: { $exists: false },
+                sendTo: req.user?._id
+            },
+            update: {
+                AcceptedAt: new Date()
+            }
+        });
+        if (!FriendRequestExist) {
+            throw new error_response_1.conflictException("Fail to find matching result");
+        }
+        await Promise.all([
+            await this.userModel.updateOne({
+                filter: {
+                    _id: FriendRequestExist.sendTo
+                },
+                update: {
+                    $addToSet: {
+                        friends: FriendRequestExist.createdBy
+                    }
+                }
+            }),
+            await this.userModel.updateOne({
+                filter: {
+                    _id: FriendRequestExist.createdBy
+                },
+                update: {
+                    $addToSet: {
+                        friends: FriendRequestExist.sendTo
+                    }
+                }
+            })
+        ]);
+        return (0, success_response_1.successResponse)({
+            res,
+        });
+    };
+    deleteFriendRequest = async (req, res) => {
+        const { requestId } = req.params;
+        const FriendRequestExist = await this.friendRequestModel.findOne({
+            filter: {
+                _id: requestId,
+                AcceptedAt: { $exists: false },
+                sendTo: req.user?._id
+            }
+        });
+        if (!FriendRequestExist) {
+            throw new error_response_1.conflictException("Fail to find matching result");
+        }
+        await this.friendRequestModel.deleteOne({
+            filter: {
+                _id: requestId,
+                sendTo: req.user?._id
+            }
+        });
+        return (0, success_response_1.successResponse)({
+            res,
+        });
+    };
+    unfriend = async (req, res) => {
+        const { userId } = req.params;
+        if (req.user?.BlockList.includes(userId)) {
+            throw new error_response_1.NotFoundException("You Blocked this user");
+        }
+        await Promise.all([await this.userModel.updateOne({
+                filter: {
+                    _id: userId,
+                    friends: {
+                        $in: [req.user?._id]
+                    },
+                    BlockList: { $nin: [req.user?._id] }
+                },
+                update: {
+                    $pull: {
+                        friends: req.user?._id
+                    }
+                }
+            }),
+            await this.userModel.updateOne({
+                filter: {
+                    _id: req.user?._id,
+                    friends: {
+                        $in: [userId]
+                    },
+                },
+                update: {
+                    $pull: {
+                        friends: userId
+                    }
+                }
+            })
+        ]);
+        return (0, success_response_1.successResponse)({
+            res,
+        });
+    };
+    blockUser = async (req, res) => {
+        const { userId } = req.params;
+        const { action } = req.query;
+        let denyUsers = [User_model_1.RoleEnum.superAdmin, User_model_1.RoleEnum.admin];
+        if (req.user?._id === userId) {
+            throw new error_response_1.BadRequestException("You can't block yourself");
+        }
+        let filter = {
+            _id: userId,
+            role: {
+                $nin: denyUsers.filter(role => req.user?.role === User_model_1.RoleEnum.admin)
+            }
+        };
+        let update = {
+            $pull: {
+                friends: req.user?._id
+            }
+        };
+        let filterUser = {
+            _id: req.user?._id
+        };
+        let updateUser = {
+            $addToSet: {
+                BlockList: userId
+            },
+            $pull: {
+                friends: userId
+            }
+        };
+        if (action === User_model_1.BlockActionEnum.unblock) {
+            filterUser = {
+                _id: req.user?._id,
+                $in: {
+                    BlockList: userId
+                }
+            };
+            updateUser = {
+                $pull: {
+                    BlockList: userId
+                }
+            };
+        }
+        const user = await this.userModel.findOneAndUpdate({
+            filter,
+            update
+        });
+        await this.userModel.updateOne({
+            filter: filterUser,
+            update: updateUser
+        });
+        if (!user) {
+            throw new error_response_1.NotFoundException("Fail to find matching result");
+        }
+        return (0, success_response_1.successResponse)({
+            res,
+        });
     };
 }
 exports.default = new UserService;

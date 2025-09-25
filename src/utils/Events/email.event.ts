@@ -9,7 +9,8 @@ export const emailEvent = new EventEmitter();
 interface IEmail extends Mail.Options{
     otp: number,
     userName?: string,
-    postContent?: string
+    Content?: string,
+    field?: string
 };
 
 emailEvent.on("confirmEmail", async (data: IEmail) => {
@@ -35,16 +36,18 @@ emailEvent.on("SendForgotPasswordCode", async (data: IEmail) => {
     }
 });
 
-emailEvent.on("MentionedYouInPost", async (data: IEmail) => {
+emailEvent.on("MentionedYou", async (data: IEmail) => {
     try {
-        data.subject = `${data.userName} mentioned you and others in a post!`;
-        data.text = `${data.postContent}`;
+
+        data.subject = `${data.userName} mentioned you and others in a ${data.field}!`;
+        data.text = `${data.Content}`;
       //  data.html = verifyEmailTemplate({ otp: data.otp, userEmail: data.to as string, title: "Forgotten password code" });
         await sendEmail(data)
     } catch (error) {
         log(`Fail To Send Email To ${data.to}`, error);
     }
 });
+
 
 emailEvent.on("stepVerification", async (data: IEmail) => {
     try {

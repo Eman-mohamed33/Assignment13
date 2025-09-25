@@ -17,3 +17,5 @@ Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./User.repository"), exports);
 __exportStar(require("./Token.repository"), exports);
 __exportStar(require("./Post.repository"), exports);
+__exportStar(require("./Comment.repository"), exports);
+__exportStar(require("./FriendRequest.repository"), exports);

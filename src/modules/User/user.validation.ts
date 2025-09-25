@@ -2,7 +2,7 @@ import { z } from "zod";
 import { LogoutEnum } from "../../utils/Security/token.security";
 import { Types } from "mongoose";
 import { generalFields } from "../../middleware/validation.middleware";
-import { RoleEnum } from "../../DB/models/User.model";
+import { BlockActionEnum, RoleEnum } from "../../DB/models/User.model";
 
 export const logout = {
     body: z.strictObject({
@@ -25,7 +25,7 @@ export const freezeAccount = {
 
 export const restoreAccount = {
     params: z.object({
-        userId: z.string(),
+        userId: generalFields.id,
     }).refine((data) => {
         return Types.ObjectId.isValid(data.userId);
     }, {
@@ -72,5 +72,40 @@ export const updateBasicInfo = {
         age: generalFields.age.optional(),
         role: z.enum(RoleEnum).default(RoleEnum.user).optional()
     
+    }),
+}
+
+export const changeRole = {
+    params: z.strictObject({
+        userId: generalFields.id
+    }),
+    body: z.strictObject({
+        role: z.enum(RoleEnum),
+    })
+}
+
+export const sentFriendRequest = {
+    params: changeRole.params
+};
+
+export const acceptFriendRequest = {
+    params: z.strictObject({
+        requestId: generalFields.id
+    }),
+   
+}
+
+export const deleteFriendRequest = {
+    params: acceptFriendRequest.params
+}
+
+export const unfriend = {
+    params: changeRole.params
+}
+
+export const blockUser = {
+    params: unfriend.params,
+    query: z.strictObject({
+        action: z.enum(BlockActionEnum).default(BlockActionEnum.block),
     }),
 }

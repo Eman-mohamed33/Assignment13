@@ -1,7 +1,8 @@
 import { EventEmitter } from "node:events";
 import { UserRepository } from "../../DB/Repository";
-import { UserModel } from "../../DB/models/User.model";
+import { HUserDocument, UserModel } from "../../DB/models/User.model";
 import { deleteFile, getFile } from "../Multer/S3.config";
+import { UpdateQuery } from "mongoose";
 
 
 
@@ -25,11 +26,16 @@ s3Event.on("trackProfileImageUpload",  (data) => {
         } catch (error: any) {
             console.log(error);
             if (error.Code === "NoSuchKey") {
+
+                let unsetData: UpdateQuery<HUserDocument> = { tempOldProfileImage: 1 };
+                if (!data.oldKey) {
+                    unsetData = { tempOldProfileImage: 1, profileImage: 1 }
+                }
                 await userModel.updateOne({
                     filter: { _id: data.id },
                     update: {
                         profileImage: data.oldKey,
-                        $unset: { tempOldProfileImage: 1 }
+                        $unset: unsetData
                     }
                 })
             }

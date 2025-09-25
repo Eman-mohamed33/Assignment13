@@ -12,10 +12,12 @@ var AllowCommentsEnum;
 })(AllowCommentsEnum || (exports.AllowCommentsEnum = AllowCommentsEnum = {}));
 var AvailabilityEnum;
 (function (AvailabilityEnum) {
-    AvailabilityEnum["pubic"] = "pubic";
+    AvailabilityEnum["pubic"] = "public";
     AvailabilityEnum["friends"] = "friends";
     AvailabilityEnum["onlyMe"] = "only-Me";
     AvailabilityEnum["closeFriends"] = "close-Friends";
+    AvailabilityEnum["friendsExcept"] = "Except";
+    AvailabilityEnum["specificFriends"] = "Only";
 })(AvailabilityEnum || (exports.AvailabilityEnum = AvailabilityEnum = {}));
 var LikeActionEnum;
 (function (LikeActionEnum) {
@@ -47,11 +49,25 @@ exports.postSchema = new mongoose_1.Schema({
     deletedAt: Date,
     restoredBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
     restoredAt: Date,
+    Only: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
+    Except: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
 }, {
     timestamps: true,
-    strictQuery: true
+    strictQuery: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
 });
 exports.postSchema.pre(["updateOne", "findOneAndUpdate"], function (next) {
+    const query = this.getQuery();
+    if (query.paranoid === false) {
+        this.setQuery({ ...query });
+    }
+    else {
+        this.setQuery({ ...query, deletedAt: { $exists: false } });
+    }
+    next();
+});
+exports.postSchema.pre(["find", "findOne", "countDocuments"], function (next) {
     const query = this.getQuery();
     if (query.paranoid === false) {
         this.setQuery({ ...query });
@@ -71,12 +87,19 @@ exports.postSchema.post("save", async function (doc, next) {
     console.log({ users, tags: doc.tags });
     if (users?.length) {
         for (const user of users) {
-            email_event_1.emailEvent.emit("MentionedYouInPost", {
+            email_event_1.emailEvent.emit("MentionedYou", {
                 to: user.email,
                 userName: user.userName,
-                postContent: doc.content
+                Content: doc.content,
+                field: "post"
             });
         }
     }
+});
+exports.postSchema.virtual("comments", {
+    localField: "_id",
+    foreignField: "postId",
+    ref: "Comment",
+    justOne: true
 });
 exports.PostModel = mongoose_1.models.Post || (0, mongoose_1.model)("Post", exports.postSchema);

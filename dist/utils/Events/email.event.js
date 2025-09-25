@@ -31,10 +31,10 @@ exports.emailEvent.on("SendForgotPasswordCode", async (data) => {
         (0, node_console_1.log)(`Fail To Send Email To ${data.to}`, error);
     }
 });
-exports.emailEvent.on("MentionedYouInPost", async (data) => {
+exports.emailEvent.on("MentionedYou", async (data) => {
     try {
-        data.subject = `${data.userName} mentioned you and others in a post!`;
-        data.text = `${data.postContent}`;
+        data.subject = `${data.userName} mentioned you and others in a ${data.field}!`;
+        data.text = `${data.Content}`;
         await (0, send_email_1.sendEmail)(data);
     }
     catch (error) {

@@ -1,57 +1,33 @@
 import { HydratedDocument, model, models, Schema, Types } from "mongoose";
-import { emailEvent } from "../../utils/Events/email.event";
-import { UserRepository } from "../Repository";
+import { IPost } from "./Post.model";
 import { UserModel } from "./User.model";
+import { UserRepository } from "../Repository";
+import { emailEvent } from "../../utils/Events/email.event";
 
-export enum AllowCommentsEnum {
-    allow = "allow",
-    deny = "deny"
-}
-
-export enum AvailabilityEnum {
-    pubic = "public",
-    friends = "friends",
-    onlyMe = "only-Me",
-    closeFriends = "close-Friends",
-    friendsExcept = "Except",
-    specificFriends = "Only"
-}
-
-export enum LikeActionEnum {
-    like = "like",
-    unlike = "unlike"
-}
-
-export interface IPost{
+export interface IComment {
     content?: string;
     attachments?: string[];
 
-    assetsFolderId: string;
-
-    availability: AvailabilityEnum;
-    allowComments: AllowCommentsEnum;
+    createdBy: Types.ObjectId;
+    postId: Types.ObjectId | Partial<IPost>;
+    commentId?: Types.ObjectId;
 
     tags?: Types.ObjectId[];
     likes: Types.ObjectId[];
-
-    createdBy: Types.ObjectId;
-    Only: Types.ObjectId[];
-    Except: Types.ObjectId[];
-
+    
     deletedBy?: Types.ObjectId;
     deletedAt?: Date;
-
+    
     restoredBy?: Types.ObjectId;
     restoredAt?: Date;
 
     createdAt: Date;
     updatedAt: Date;
-
 }
 
-export type HPostDocument = HydratedDocument<IPost>;
+export type HCommentDocument = HydratedDocument<IComment>;
 
-export const postSchema = new Schema<IPost>({
+const commentSchema = new Schema<IComment>({
     content: {
         type: String, minlength: 2, maxlength: 500000, required: function () {
             return !this.attachments?.length ? true : false
@@ -59,33 +35,19 @@ export const postSchema = new Schema<IPost>({
     },
     
     attachments: [String],
-
-    assetsFolderId: String,
-
-    availability: {
-        type: String,
-        enum: AvailabilityEnum,
-        default: AvailabilityEnum.pubic
-    },
-    allowComments: {
-        type: String,
-        enum: AllowCommentsEnum,
-        default: AllowCommentsEnum.allow
-    },
-
     tags: [{ type: Schema.Types.ObjectId, ref: "User" }],
     likes: [{ type: Schema.Types.ObjectId, ref: "User" }],
 
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
-
+    
     deletedBy: { type: Schema.Types.ObjectId, ref: "User" },
     deletedAt: Date,
-
+    
     restoredBy: { type: Schema.Types.ObjectId, ref: "User" },
     restoredAt: Date,
 
-    Only: [{ type: Schema.Types.ObjectId, ref: "User" }],
-    Except: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    postId: { type: Schema.Types.ObjectId, ref: "Post", required: true },
+    commentId: { type: Schema.Types.ObjectId, ref: "Comment" },
 
 }, {
     timestamps: true,
@@ -94,7 +56,8 @@ export const postSchema = new Schema<IPost>({
     toObject: { virtuals: true }
 });
 
-postSchema.pre(["updateOne", "findOneAndUpdate"], function (next) {
+
+commentSchema.pre(["updateOne", "findOneAndUpdate"], function (next) {
 
     const query = this.getQuery();
     if (query.paranoid === false) {
@@ -105,7 +68,7 @@ postSchema.pre(["updateOne", "findOneAndUpdate"], function (next) {
     next();
 });
 
-postSchema.pre(["find", "findOne", "countDocuments"], function (next) {
+commentSchema.pre(["find", "findOne", "countDocuments"], function (next) {
     
     const query = this.getQuery();
     if (query.paranoid === false) {
@@ -113,11 +76,16 @@ postSchema.pre(["find", "findOne", "countDocuments"], function (next) {
     } else {
         this.setQuery({ ...query, deletedAt: { $exists: false } });
     }
-
     next();
 });
 
-postSchema.post("save", async function (doc, next) {
+commentSchema.virtual("reply", {
+    localField:"_id",
+    foreignField: "commentId",
+    ref: "Comment",
+})
+
+commentSchema.post("save", async function (doc, next) {
     const userModel = new UserRepository(UserModel);
     const users = await userModel.find({
         filter: {
@@ -133,20 +101,38 @@ postSchema.post("save", async function (doc, next) {
                 to: user.email,
                 userName: user.userName,
                 Content: doc.content,
-                field: "post"
+                field:"comment"
             });
         }
     }
  
 });
 
-postSchema.virtual("comments", {
-    localField: "_id",
-    foreignField: "postId",
-    ref: "Comment",
-    justOne: true
+commentSchema.post("updateOne", async function (doc, next) {
+
+    const Doc = await this.model.findOne(this.getFilter());
+    
+    const userModel = new UserRepository(UserModel);
+
+    const users = await userModel.find({
+        filter: {
+            _id: { $in: Doc.tags }
+        }
+    })
+    
+    console.log({ users, tags: Doc.tags });
+    
+    if (users?.length) {
+        for (const user of users) {
+            emailEvent.emit("MentionedYou", {
+                to: user.email,
+                userName: user.userName,
+                Content: Doc.content,
+                field:"comment"
+            });
+        }
+    }
+ 
 });
 
-
-
-export const PostModel = models.Post || model<IPost>("Post", postSchema);
+export const CommentModel = models.Comment || model<IComment>("Comment", commentSchema);

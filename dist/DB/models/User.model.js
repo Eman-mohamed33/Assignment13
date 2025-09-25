@@ -1,10 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UserModel = exports.ProviderEnum = exports.RoleEnum = exports.GenderEnum = void 0;
+exports.UserModel = exports.ProviderEnum = exports.RoleEnum = exports.GenderEnum = exports.BlockActionEnum = void 0;
 const mongoose_1 = require("mongoose");
 const Hash_security_1 = require("../../utils/Security/Hash.security");
 const Encryption_security_1 = require("../../utils/Security/Encryption.security");
 const email_event_1 = require("../../utils/Events/email.event");
+var BlockActionEnum;
+(function (BlockActionEnum) {
+    BlockActionEnum["block"] = "block";
+    BlockActionEnum["unblock"] = "unblock";
+})(BlockActionEnum || (exports.BlockActionEnum = BlockActionEnum = {}));
 var GenderEnum;
 (function (GenderEnum) {
     GenderEnum["male"] = "male";
@@ -15,6 +20,7 @@ var RoleEnum;
 (function (RoleEnum) {
     RoleEnum["user"] = "user";
     RoleEnum["admin"] = "admin";
+    RoleEnum["superAdmin"] = "super-admin";
 })(RoleEnum || (exports.RoleEnum = RoleEnum = {}));
 ;
 var ProviderEnum;
@@ -98,8 +104,10 @@ const userSchema = new mongoose_1.Schema({
     deletedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
     restoredAt: Date,
     restoredBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
+    BlockList: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
     stepVerificationOtp: String,
     enable2stepVerification: Boolean,
+    friends: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
     extra: {
         name: String
     },

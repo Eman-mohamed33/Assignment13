@@ -69,6 +69,8 @@ const bootstrap = async (): Promise<void> => {
         if (!s3Response?.Body) {
             throw new BadRequestException("Fail to fetch this resource");
         }
+
+        res.set("Cross-Origin-Resource-Policy", "cross-origin");
         res.setHeader(
             "Content-Type",
             s3Response.ContentType || "application/octet-stream");
