@@ -12,6 +12,8 @@ import connectDB from "./DB/connection.db";
 
 
 import { authRouter, userRouter, postRouter } from "./modules";
+import { ChatRouter } from "./modules/Chat";
+
 // import { router as authRouter } from "./modules/Authentication";
 // import { router as userRouter } from "./modules/User";
 
@@ -22,6 +24,8 @@ import { BadRequestException, globalErrorHandling } from "./utils/Response/error
 import { pipeline } from "node:stream";
 import { promisify } from "node:util";
 import { getFile } from "./utils/Multer/S3.config";
+import { initializeIo } from "./modules/Gateway/gateway";
+
 
 const createS3WriteStream = promisify(pipeline);
 
@@ -56,6 +60,7 @@ const bootstrap = async (): Promise<void> => {
     app.use("/auth", authRouter);
     app.use("/user", userRouter);
     app.use("/post", postRouter);
+    app.use("/chat", ChatRouter);
 
     //get-Asset
     app.get("/upload/*path", async (req, res: Response): Promise<void> => {
@@ -76,7 +81,7 @@ const bootstrap = async (): Promise<void> => {
             s3Response.ContentType || "application/octet-stream");
 
         // for-download
-       // res.setHeader("Content-Disposition", `attachments; filename="${key?.split("/").pop()}"`);
+        // res.setHeader("Content-Disposition", `attachments; filename="${key?.split("/").pop()}"`);
         return await createS3WriteStream(s3Response.Body as NodeJS.ReadableStream, res);
     });
 
@@ -241,12 +246,17 @@ const bootstrap = async (): Promise<void> => {
     app.use(globalErrorHandling);
 
 
-    app.listen(port, () => {
+    const httpServer = app.listen(port, () => {
         console.log(`Server Is Running On Port ::: ${port}`);
-    })
+    });
+
+
+    initializeIo(httpServer);
+  
+
 
 };
-
+        
 export default bootstrap;
 
 

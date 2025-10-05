@@ -11,6 +11,7 @@ const S3_config_1 = require("../../utils/Multer/S3.config");
 const error_response_1 = require("../../utils/Response/error.response");
 const nanoid_1 = require("nanoid");
 const Comment_model_1 = require("../../DB/models/Comment.model");
+const Gateway_1 = require("../Gateway");
 function postAvailability(req) {
     return [
         { availability: Post_model_1.AvailabilityEnum.pubic },
@@ -119,6 +120,12 @@ class PostService {
             }
         }))) {
             throw new error_response_1.NotFoundException("Post not exist or In-valid postId");
+        }
+        if (action !== Post_model_1.LikeActionEnum.unlike) {
+            (0, Gateway_1.getIo)().to(Gateway_1.connectedSockets.get(post.createdBy.toString())).emit("likePost", {
+                postId,
+                userId: req.user?._id
+            });
         }
         return (0, success_response_1.successResponse)({ res });
     };

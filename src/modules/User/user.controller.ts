@@ -6,7 +6,10 @@ import { validation } from "../../middleware/validation.middleware";
 import * as validators from "./user.validation";
 import { TokenEnum } from "../../utils/Security/token.security";
 import { cloudFileUpload, fileValidation, StorageEnum } from "../../utils/Multer/cloud.multer";
+import { ChatRouter } from "../Chat";
 const router: Router = Router();
+
+router.use("/:userId/chat", ChatRouter);
 
 router.get("/", authorization(endPoint.profile), userService.profile);
 router.get("/dashboard", authorization(endPoint.dashboard), userService.dashboard);

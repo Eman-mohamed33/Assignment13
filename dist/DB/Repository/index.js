@@ -19,3 +19,4 @@ __exportStar(require("./Token.repository"), exports);
 __exportStar(require("./Post.repository"), exports);
 __exportStar(require("./Comment.repository"), exports);
 __exportStar(require("./FriendRequest.repository"), exports);
+__exportStar(require("./Chat.repository"), exports);

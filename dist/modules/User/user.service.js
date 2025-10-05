@@ -14,9 +14,11 @@ const nanoid_1 = require("nanoid");
 const Encryption_security_1 = require("../../utils/Security/Encryption.security");
 const Post_model_1 = require("../../DB/models/Post.model");
 const FriendRequest_model_1 = require("../../DB/models/FriendRequest.model");
+const Chat_model_1 = require("../../DB/models/Chat.model");
 class UserService {
     userModel = new Repository_1.UserRepository(User_model_1.UserModel);
     postModel = new Repository_1.PostRepository(Post_model_1.PostModel);
+    chatModel = new Repository_1.ChatRepository(Chat_model_1.ChatModel);
     friendRequestModel = new Repository_1.FriendRequestRepository(FriendRequest_model_1.FriendRequestModel);
     constructor() { }
     profile = async (req, res) => {
@@ -39,9 +41,16 @@ class UserService {
         if (!profile) {
             throw new error_response_1.NotFoundException("Fail to find this user");
         }
+        const groups = await this.chatModel.find({
+            filter: {
+                participants: { $in: req.user._id },
+                group: { $exists: true }
+            }
+        });
         return (0, success_response_1.successResponse)({
             res, data: {
-                user: profile
+                user: profile,
+                groups
             }
         });
     };

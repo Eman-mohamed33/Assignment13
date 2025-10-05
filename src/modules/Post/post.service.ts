@@ -9,6 +9,7 @@ import { BadRequestException, NotFoundException } from "../../utils/Response/err
 import { nanoid } from "nanoid";
 import { IActionPostQueryDto, IPostLikeParamsDto } from "./post.dto";
 import { CommentModel } from "../../DB/models/Comment.model";
+import { connectedSockets, getIo } from "../Gateway";
 
 
 
@@ -152,6 +153,12 @@ class PostService {
             throw new NotFoundException("Post not exist or In-valid postId");
         }
 
+        if (action !== LikeActionEnum.unlike) {
+            getIo().to(connectedSockets.get(post.createdBy.toString()) as string[]).emit("likePost", {
+                postId,
+                userId: req.user?._id
+            });
+        }
         
         return successResponse({ res });
     }

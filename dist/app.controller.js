@@ -12,10 +12,12 @@ const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = require("express-rate-limit");
 const connection_db_1 = __importDefault(require("./DB/connection.db"));
 const modules_1 = require("./modules");
+const Chat_1 = require("./modules/Chat");
 const error_response_1 = require("./utils/Response/error.response");
 const node_stream_1 = require("node:stream");
 const node_util_1 = require("node:util");
 const S3_config_1 = require("./utils/Multer/S3.config");
+const gateway_1 = require("./modules/Gateway/gateway");
 const createS3WriteStream = (0, node_util_1.promisify)(node_stream_1.pipeline);
 const limiter = (0, express_rate_limit_1.rateLimit)({
     windowMs: 60 * 60000,
@@ -36,6 +38,7 @@ const bootstrap = async () => {
     app.use("/auth", modules_1.authRouter);
     app.use("/user", modules_1.userRouter);
     app.use("/post", modules_1.postRouter);
+    app.use("/chat", Chat_1.ChatRouter);
     app.get("/upload/*path", async (req, res) => {
         const { path } = req.params;
         if (!path?.length) {
@@ -54,8 +57,9 @@ const bootstrap = async () => {
         res.status(404).json({ message: "In-Valid Application Routing ❌" });
     });
     app.use(error_response_1.globalErrorHandling);
-    app.listen(port, () => {
+    const httpServer = app.listen(port, () => {
         console.log(`Server Is Running On Port ::: ${port}`);
     });
+    (0, gateway_1.initializeIo)(httpServer);
 };
 exports.default = bootstrap;

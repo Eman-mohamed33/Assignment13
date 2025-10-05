@@ -3,7 +3,7 @@ import { IChangeRoleBodyDto, IChangeRoleParamsDto, IFreezeAccountParamsDto, IHar
 import { RootFilterQuery, Types, UpdateQuery } from "mongoose";
 import { BlockActionEnum, HUserDocument, IUser, RoleEnum, UserModel } from "../../DB/models/User.model";
 import { createLoginCredentials, createRevokeToken, LogoutEnum } from "../../utils/Security/token.security";
-import { FriendRequestRepository, PostRepository, UserRepository } from "../../DB/Repository";
+import { ChatRepository, FriendRequestRepository, PostRepository, UserRepository } from "../../DB/Repository";
 import { JwtPayload } from "jsonwebtoken";
 import { deleteFiles, deleteFolderByPrefix, preUploadSignedUrl, uploadFilesOrLargeFiles } from "../../utils/Multer/S3.config";
 import { StorageEnum } from "../../utils/Multer/cloud.multer";
@@ -18,6 +18,7 @@ import { customAlphabet } from "nanoid";
 import { generateEncryption } from "../../utils/Security/Encryption.security";
 import { PostModel } from "../../DB/models/Post.model";
 import { FriendRequestModel } from "../../DB/models/FriendRequest.model";
+import { ChatModel } from "../../DB/models/Chat.model";
 
 
 
@@ -25,6 +26,8 @@ import { FriendRequestModel } from "../../DB/models/FriendRequest.model";
 class UserService {
     private userModel = new UserRepository(UserModel);
     private postModel = new PostRepository(PostModel);
+    private chatModel = new ChatRepository(ChatModel);
+
     private friendRequestModel = new FriendRequestRepository(FriendRequestModel);
    
 
@@ -54,9 +57,18 @@ class UserService {
             throw new NotFoundException("Fail to find this user");
         }
 
+        const groups = await this.chatModel.find({
+            filter: {
+                participants: { $in: req.user._id as Types.ObjectId },
+                group: { $exists: true }
+            }
+        });
+
+        
         return successResponse<IUserResponse>({
             res, data: {
-                user: profile
+                user: profile,
+                groups
             }
         });
     }

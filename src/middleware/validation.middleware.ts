@@ -7,7 +7,7 @@ import { Types } from "mongoose";
 
 
 type KeyReqType = keyof Request;
-type SchemaType = Partial<Record<KeyReqType, ZodType>>
+export type SchemaType = Partial<Record<KeyReqType, ZodType>>
 
 type ValidationErrorsType = Array<{
     key: KeyReqType,
@@ -19,8 +19,8 @@ type ValidationErrorsType = Array<{
 
 export const validation = (schema: SchemaType) => {
     return (req: Request, res: Response, next: NextFunction): NextFunction => {
-        console.log(schema);
-        console.log(Object.keys(schema));
+        // console.log(schema);
+        // console.log(Object.keys(schema));
         
         const validationErrors: ValidationErrorsType = [];
 

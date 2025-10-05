@@ -7,8 +7,6 @@ const User_model_1 = require("../DB/models/User.model");
 const mongoose_1 = require("mongoose");
 const validation = (schema) => {
     return (req, res, next) => {
-        console.log(schema);
-        console.log(Object.keys(schema));
         const validationErrors = [];
         for (const key of Object.keys(schema)) {
             if (!schema[key])
