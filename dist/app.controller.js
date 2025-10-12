@@ -19,6 +19,9 @@ const node_util_1 = require("node:util");
 const S3_config_1 = require("./utils/Multer/S3.config");
 const gateway_1 = require("./modules/Gateway/gateway");
 const createS3WriteStream = (0, node_util_1.promisify)(node_stream_1.pipeline);
+const express_2 = require("graphql-http/lib/use/express");
+const GraphQl_1 = require("./modules/GraphQl");
+const authentication_middleware_1 = require("./middleware/authentication.middleware");
 const limiter = (0, express_rate_limit_1.rateLimit)({
     windowMs: 60 * 60000,
     limit: 2000,
@@ -32,6 +35,7 @@ const bootstrap = async () => {
     app.use((0, helmet_1.default)());
     app.use(limiter);
     app.use(express_1.default.json());
+    app.all("/graphql", (0, authentication_middleware_1.authentication)(), (0, express_2.createHandler)({ schema: GraphQl_1.schema, context: (req) => ({ user: req.raw.user }) }));
     app.get("/", (req, res) => {
         res.json({ message: "Welcome To Social Media App Backend Landing Page ➰💙" });
     });

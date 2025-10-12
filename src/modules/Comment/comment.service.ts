@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { successResponse } from "../../utils/Response/success.response";
 import { CommentRepository, PostRepository, UserRepository } from "../../DB/Repository";
 import { CommentModel } from "../../DB/models/Comment.model";
-import { UserModel } from "../../DB/models/User.model";
+import { HUserDocument, UserModel } from "../../DB/models/User.model";
 import { AllowCommentsEnum, HPostDocument, PostModel } from "../../DB/models/Post.model";
 import { BadRequestException, NotFoundException } from "../../utils/Response/error.response";
 import { postAvailability } from "../Post/post.service";
@@ -24,7 +24,7 @@ class CommentService {
             filter: {
                 _id: postId,
                 allowComments: AllowCommentsEnum.allow,
-                $or: postAvailability(req),
+                $or: postAvailability(req.user as HUserDocument),
                   createdBy: { $nin: req.user?.BlockList || [] }
             }
         });
@@ -84,23 +84,22 @@ class CommentService {
         const { postId, commentId } = req.params as unknown as IReplyOnCommentParamsDto;
 
         const comment = await this.commentModel.findOne({
-            filter: {
-                _id: commentId,
-                postId,
-            },
-            options: {
-                populate: [
-                    {
-                        path: "postId",
-                        match: {
-                            allowComments: AllowCommentsEnum.allow,
-                            $or: postAvailability(req),
-                            createdBy: { $nin: req.user?.BlockList || [] }
-                        }
-                    }
-                    
-                ]
-            }
+          filter: {
+            _id: commentId,
+            postId,
+          },
+          options: {
+            populate: [
+              {
+                path: "postId",
+                match: {
+                  allowComments: AllowCommentsEnum.allow,
+                  $or: postAvailability(req.user as HUserDocument),
+                  createdBy: { $nin: req.user?.BlockList || [] },
+                },
+              },
+            ],
+          },
         });
 
         if (!comment?.postId) {
@@ -154,11 +153,11 @@ class CommentService {
         const { postId, commentId } = req.params as unknown as { postId: Types.ObjectId, commentId: Types.ObjectId };
        
         const post = await this.postModel.findOne({
-            filter: {
-                _id: postId,
-                $or: postAvailability(req),
-                createdBy: { $nin: req.user?.BlockList || [] }
-            }
+          filter: {
+            _id: postId,
+            $or: postAvailability(req.user as HUserDocument),
+            createdBy: { $nin: req.user?.BlockList || [] },
+          },
         });
 
 
@@ -189,11 +188,11 @@ class CommentService {
         const { postId, commentId } = req.params as unknown as { postId: Types.ObjectId, commentId: Types.ObjectId };
 
         const post = await this.postModel.findOne({
-            filter: {
-                _id: postId,
-                $or: postAvailability(req),
-                createdBy: { $nin: req.user?.BlockList || [] }
-            }
+          filter: {
+            _id: postId,
+            $or: postAvailability(req.user as HUserDocument),
+            createdBy: { $nin: req.user?.BlockList || [] },
+          },
         });
 
         if (!post || !(await this.userModel.findOne({
@@ -279,11 +278,11 @@ class CommentService {
         const { postId, commentId } = req.params as unknown as { postId: Types.ObjectId, commentId: Types.ObjectId };
         
         const post = await this.postModel.findOne({
-            filter: {
-                _id: postId,
-                $or: postAvailability(req),
-                createdBy: { $nin: req.user?.BlockList || [] }
-            }
+          filter: {
+            _id: postId,
+            $or: postAvailability(req.user as HUserDocument),
+            createdBy: { $nin: req.user?.BlockList || [] },
+          },
         });
 
         if (!post || !(await this.userModel.findOne({
@@ -370,11 +369,11 @@ class CommentService {
 
         
         const post = await this.postModel.findOne({
-            filter: {
-                _id: postId,
-                $or: postAvailability(req),
-                createdBy: { $nin: req.user?.BlockList || [] }
-            }
+          filter: {
+            _id: postId,
+            $or: postAvailability(req.user as HUserDocument),
+            createdBy: { $nin: req.user?.BlockList || [] },
+          },
         });
 
 

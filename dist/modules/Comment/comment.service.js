@@ -20,7 +20,7 @@ class CommentService {
             filter: {
                 _id: postId,
                 allowComments: Post_model_1.AllowCommentsEnum.allow,
-                $or: (0, post_service_1.postAvailability)(req),
+                $or: (0, post_service_1.postAvailability)(req.user),
                 createdBy: { $nin: req.user?.BlockList || [] }
             }
         });
@@ -76,12 +76,12 @@ class CommentService {
                         path: "postId",
                         match: {
                             allowComments: Post_model_1.AllowCommentsEnum.allow,
-                            $or: (0, post_service_1.postAvailability)(req),
-                            createdBy: { $nin: req.user?.BlockList || [] }
-                        }
-                    }
-                ]
-            }
+                            $or: (0, post_service_1.postAvailability)(req.user),
+                            createdBy: { $nin: req.user?.BlockList || [] },
+                        },
+                    },
+                ],
+            },
         });
         if (!comment?.postId) {
             throw new error_response_1.NotFoundException("Post Not Exist Or Deleted");
@@ -124,9 +124,9 @@ class CommentService {
         const post = await this.postModel.findOne({
             filter: {
                 _id: postId,
-                $or: (0, post_service_1.postAvailability)(req),
-                createdBy: { $nin: req.user?.BlockList || [] }
-            }
+                $or: (0, post_service_1.postAvailability)(req.user),
+                createdBy: { $nin: req.user?.BlockList || [] },
+            },
         });
         if (!post || !(await this.userModel.findOne({
             filter: {
@@ -153,9 +153,9 @@ class CommentService {
         const post = await this.postModel.findOne({
             filter: {
                 _id: postId,
-                $or: (0, post_service_1.postAvailability)(req),
-                createdBy: { $nin: req.user?.BlockList || [] }
-            }
+                $or: (0, post_service_1.postAvailability)(req.user),
+                createdBy: { $nin: req.user?.BlockList || [] },
+            },
         });
         if (!post || !(await this.userModel.findOne({
             filter: {
@@ -231,9 +231,9 @@ class CommentService {
         const post = await this.postModel.findOne({
             filter: {
                 _id: postId,
-                $or: (0, post_service_1.postAvailability)(req),
-                createdBy: { $nin: req.user?.BlockList || [] }
-            }
+                $or: (0, post_service_1.postAvailability)(req.user),
+                createdBy: { $nin: req.user?.BlockList || [] },
+            },
         });
         if (!post || !(await this.userModel.findOne({
             filter: {
@@ -302,9 +302,9 @@ class CommentService {
         const post = await this.postModel.findOne({
             filter: {
                 _id: postId,
-                $or: (0, post_service_1.postAvailability)(req),
-                createdBy: { $nin: req.user?.BlockList || [] }
-            }
+                $or: (0, post_service_1.postAvailability)(req.user),
+                createdBy: { $nin: req.user?.BlockList || [] },
+            },
         });
         if (!post || !(await this.userModel.findOne({
             filter: {

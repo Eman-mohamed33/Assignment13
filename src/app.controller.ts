@@ -29,11 +29,16 @@ import { initializeIo } from "./modules/Gateway/gateway";
 
 const createS3WriteStream = promisify(pipeline);
 
+import { createHandler } from "graphql-http/lib/use/express";
+import { schema } from "./modules/GraphQl";
+import { authentication } from "./middleware/authentication.middleware";
+
 const limiter = rateLimit({
     windowMs: 60 * 60000,
     limit: 2000,
     message: { error: "Too Many Failed Requests ,Please Try Again later ❗" }
 })
+
 
 const bootstrap = async (): Promise<void> => {
     const app: Express = express();
@@ -50,6 +55,15 @@ const bootstrap = async (): Promise<void> => {
 
     
     app.use(express.json());
+
+   
+
+
+    //GraphQl
+   // app.all("/graphql", createHandler({ schema: schema, context: (req) => ({ req }) }));
+    app.all("/graphql", authentication(), createHandler({ schema: schema, context: (req) => ({ user: req.raw.user }) }));
+    // app.all("/graphql/admin", createHandler({ schema: adminSchema }));
+
 
     //App-Routing
     app.get("/", (req: Request, res: Response) => {

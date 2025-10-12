@@ -4,6 +4,7 @@ import { BadRequestException } from "../utils/Response/error.response";
 import { z } from "zod";
 import { GenderEnum } from "../DB/models/User.model";
 import { Types } from "mongoose";
+import { GraphQLError } from "graphql";
 
 
 type KeyReqType = keyof Request;
@@ -62,6 +63,28 @@ export const validation = (schema: SchemaType) => {
 
         return next() as unknown as NextFunction;
     }
+};
+
+export const graphQlValidation = async <T = any>(schema: ZodType, args: T) => {
+    
+    const validationResults = await schema.safeParseAsync(args);
+    
+    if (!validationResults.success) {
+        const errors = validationResults.error as ZodError;
+        throw new GraphQLError("Validation Error", {
+            extensions: {
+                statusCode: 400,
+                issues: {
+                    key: "args",
+                    
+                    issues: errors.issues.map((issue) => {
+                        return { message: issue.message, path: issue.path };
+                    })
+                },
+            }
+        });
+    }
+            
 };
 
 export const generalFields = {

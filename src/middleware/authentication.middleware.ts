@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { BadRequestException, forbiddenException } from "../utils/Response/error.response";
 import { decodeToken, TokenEnum } from "../utils/Security/token.security";
 import { RoleEnum } from "../DB/models/User.model";
+import { GraphQLError } from "graphql";
 
 
 
@@ -49,4 +50,15 @@ export const authorization = (accessRoles: RoleEnum[] = [], tokenType: TokenEnum
         req.decoded = decoded;
         next();
     };
+};
+
+export const graphQlAuthorization = async (accessRoles: RoleEnum[] = [], role: RoleEnum) => {
+    if (!accessRoles.includes(role)) {
+        throw new GraphQLError("Not Authorized Account", {
+            extensions: {
+                statusCode: 403
+            }
+        });
+    }
+    
 };

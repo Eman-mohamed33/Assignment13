@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.postService = void 0;
+exports.postService = exports.PostService = void 0;
 exports.postAvailability = postAvailability;
 const success_response_1 = require("../../utils/Response/success.response");
 const Repository_1 = require("../../DB/Repository");
@@ -12,19 +12,20 @@ const error_response_1 = require("../../utils/Response/error.response");
 const nanoid_1 = require("nanoid");
 const Comment_model_1 = require("../../DB/models/Comment.model");
 const Gateway_1 = require("../Gateway");
-function postAvailability(req) {
+const graphql_1 = require("graphql");
+function postAvailability(user) {
     return [
         { availability: Post_model_1.AvailabilityEnum.pubic },
-        { availability: Post_model_1.AvailabilityEnum.onlyMe, createdBy: req.user?._id },
-        { availability: Post_model_1.AvailabilityEnum.friends, createdBy: { $in: [...(req.user?.friends || []), req.user?._id] } },
+        { availability: Post_model_1.AvailabilityEnum.onlyMe, createdBy: user._id },
+        { availability: Post_model_1.AvailabilityEnum.friends, createdBy: { $in: [...(user.friends || []), user._id] } },
         {
             availability: { $ne: Post_model_1.AvailabilityEnum.onlyMe },
-            tags: { $in: req.user?._id }
+            tags: { $in: user._id }
         },
         {
             availability: Post_model_1.AvailabilityEnum.friendsExcept,
             Except: {
-                $nin: [req.user?._id]
+                $nin: [user._id]
             },
         },
         {
@@ -32,10 +33,10 @@ function postAvailability(req) {
             $or: [
                 {
                     Only: {
-                        $in: [req.user?._id]
+                        $in: [user._id]
                     }
                 },
-                { createdBy: req.user?._id }
+                { createdBy: user._id }
             ]
         }
     ];
@@ -57,15 +58,14 @@ class PostService {
     commentModel = new Repository_1.CommentRepository(Comment_model_1.CommentModel);
     constructor() { }
     createPost = async (req, res) => {
-        if (req.body.tags &&
+        if ((req.body.tags &&
             (await this.userModel.find({
                 filter: {
                     _id: { $in: req.body.tags, $ne: req.user?._id },
-                    BlockList: { $nin: req.user?._id }
-                }
-            })).length !==
-                req.body.tags.length
-            || req.body.tags?.some((tag) => req.user?.BlockList.includes(tag))) {
+                    BlockList: { $nin: req.user?._id },
+                },
+            })).length !== req.body.tags.length) ||
+            req.body.tags?.some((tag) => req.user?.BlockList.includes(tag))) {
             throw new error_response_1.NotFoundException("Some of mentioned users are not exist");
         }
         let attachments = [];
@@ -73,58 +73,65 @@ class PostService {
         if (req.files?.length) {
             attachments = await (0, S3_config_1.uploadFilesOrLargeFiles)({
                 files: req.files,
-                path: `user/${req.decoded?._id}/post/${assetsFolderId}`
+                path: `user/${req.decoded?._id}/post/${assetsFolderId}`,
             });
         }
-        const [post] = await this.postModel.create({
+        const [post] = (await this.postModel.create({
             data: [
                 {
                     ...req.body,
                     attachments,
                     createdBy: req.user?._id,
-                    assetsFolderId
-                }
-            ]
-        }) || [];
+                    assetsFolderId,
+                },
+            ],
+        })) || [];
         if (!post) {
             if (attachments.length) {
                 await (0, S3_config_1.deleteFiles)({ urls: attachments });
             }
             throw new error_response_1.BadRequestException("Fail to create this post");
         }
-        return (0, success_response_1.successResponse)({ res, statusCode: 201, message: "Created Post Successfully" });
+        return (0, success_response_1.successResponse)({
+            res,
+            statusCode: 201,
+            message: "Created Post Successfully",
+        });
     };
     likePost = async (req, res) => {
         const { postId } = req.params;
         const { action } = req.query;
         let update = {
-            $addToSet: { likes: req.user?._id }
+            $addToSet: { likes: req.user?._id },
         };
         if (action === Post_model_1.LikeActionEnum.unlike) {
             update = {
-                $pull: { likes: req.user?._id }
+                $pull: { likes: req.user?._id },
             };
         }
         const post = await this.postModel.findOneAndUpdate({
             filter: {
                 _id: postId,
-                $or: postAvailability(req),
-                createdBy: { $nin: req.user?.BlockList || [] }
+                $or: postAvailability(req.user),
+                createdBy: { $nin: req.user?.BlockList || [] },
             },
-            update
+            update,
         });
-        if (!post || !(await this.userModel.findOne({
-            filter: {
-                _id: post?.createdBy,
-                BlockList: { $nin: [req.user?._id] }
-            }
-        }))) {
+        if (!post ||
+            !(await this.userModel.findOne({
+                filter: {
+                    _id: post?.createdBy,
+                    BlockList: { $nin: [req.user?._id] },
+                },
+            }))) {
             throw new error_response_1.NotFoundException("Post not exist or In-valid postId");
         }
         if (action !== Post_model_1.LikeActionEnum.unlike) {
-            (0, Gateway_1.getIo)().to(Gateway_1.connectedSockets.get(post.createdBy.toString())).emit("likePost", {
+            (0, Gateway_1.getIo)()
+                .to(Gateway_1.connectedSockets.get(post.createdBy.toString()))
+                .emit("likePost", {
                 postId,
-                userId: req.user?._id
+                userId: req.user?._id,
             });
         }
         return (0, success_response_1.successResponse)({ res });
@@ -134,30 +141,32 @@ class PostService {
         const post = await this.postModel.findOne({
             filter: {
                 _id: postId,
-                createdBy: req.user?._id
-            }
+                createdBy: req.user?._id,
+            },
         });
         if (!post) {
             throw new error_response_1.NotFoundException("");
         }
-        if (req.body.tags &&
+        if ((req.body.tags &&
             (await this.userModel.find({
                 filter: {
                     _id: { $in: req.body.tags, $ne: req.user?._id },
-                    BlockList: { $nin: req.user?._id }
-                }
-            })).length !==
-                req.body.tags.length
-            || req.body.tags?.some((tag) => req.user?.BlockList.includes(tag))) {
+                    BlockList: { $nin: req.user?._id },
+                },
+            })).length !== req.body.tags.length) ||
+            req.body.tags?.some((tag) => req.user?.BlockList.includes(tag))) {
             throw new error_response_1.NotFoundException("Some of mentioned users are not exist");
         }
         let attachments = [];
         if (req.files?.length) {
-            attachments = await (0, S3_config_1.uploadFilesOrLargeFiles)({ files: req.files, path: `user/${req.user?._id}/post/${post.assetsFolderId}` });
+            attachments = await (0, S3_config_1.uploadFilesOrLargeFiles)({
+                files: req.files,
+                path: `user/${req.user?._id}/post/${post.assetsFolderId}`,
+            });
         }
         const updatedPost = await this.postModel.updateOne({
             filter: {
-                _id: postId
+                _id: postId,
             },
             update: [
                 {
@@ -167,26 +176,33 @@ class PostService {
                         availability: req.body.availability || [],
                         attachments: {
                             $setUnion: [
-                                { $setDifference: ["$attachments", req.body.removedAttachments || []] },
-                                attachments
-                            ]
+                                {
+                                    $setDifference: [
+                                        "$attachments",
+                                        req.body.removedAttachments || [],
+                                    ],
+                                },
+                                attachments,
+                            ],
                         },
                         tags: {
                             $setUnion: [
                                 {
-                                    $setDifference: ["$tags",
+                                    $setDifference: [
+                                        "$tags",
                                         (req.body.removedTags || []).map((tag) => {
                                             return mongoose_1.Types.ObjectId.createFromHexString(tag);
-                                        })]
+                                        }),
+                                    ],
                                 },
                                 (req.body.tags || []).map((tag) => {
                                     return mongoose_1.Types.ObjectId.createFromHexString(tag);
                                 }),
-                            ]
-                        }
-                    }
-                }
-            ]
+                            ],
+                        },
+                    },
+                },
+            ],
         });
         if (!updatedPost.matchedCount) {
             if (attachments.length) {
@@ -205,8 +221,8 @@ class PostService {
         let { page, size } = req.query;
         const posts = await this.postModel.paginate({
             filter: {
-                $or: postAvailability(req),
-                createdBy: { $nin: req.user?.BlockList || [] }
+                $or: postAvailability(req.user),
+                createdBy: { $nin: req.user?.BlockList || [] },
             },
             page,
             size,
@@ -217,8 +233,8 @@ class PostService {
                         match: {
                             commentId: { $exists: false },
                             deletedAt: {
-                                $exists: false
-                            }
+                                $exists: false,
+                            },
                         },
                         populate: [
                             {
@@ -226,8 +242,8 @@ class PostService {
                                 match: {
                                     commentId: { $exists: false },
                                     deletedAt: {
-                                        $exists: false
-                                    }
+                                        $exists: false,
+                                    },
                                 },
                                 populate: [
                                     {
@@ -235,23 +251,23 @@ class PostService {
                                         match: {
                                             commentId: { $exists: false },
                                             deletedAt: {
-                                                $exists: false
-                                            }
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
+                                                $exists: false,
+                                            },
+                                        },
+                                    },
+                                ],
+                            },
+                        ],
                     },
-                ]
-            }
+                ],
+            },
         });
         return (0, success_response_1.successResponse)({ res, data: posts });
     };
     getPostWithComments = async (req, res) => {
         const posts = await this.postModel.findCursor({
             filter: {
-                $or: postAvailability(req),
+                $or: postAvailability(req.user),
                 createdBy: { $nin: req.user?.BlockList || [] },
             },
         });
@@ -262,21 +278,23 @@ class PostService {
         const post = await this.postModel.findById({
             id: postId,
         });
-        if (!post || !(await this.userModel.findOne({
-            filter: {
-                _id: post?.createdBy,
-                BlockList: { $nin: [req.user?._id] }
-            }
-        }))) {
+        if (!post ||
+            !(await this.userModel.findOne({
+                filter: {
+                    _id: post?.createdBy,
+                    BlockList: { $nin: [req.user?._id] },
+                },
+            }))) {
             throw new error_response_1.NotFoundException("Post not exist or In-valid postId");
         }
         if (isAvailability(post, req)) {
             throw new error_response_1.NotFoundException("Fail to find matching result");
         }
         return (0, success_response_1.successResponse)({
-            res, data: {
-                post
-            }
+            res,
+            data: {
+                post,
+            },
         });
     };
     freezePost = async (req, res) => {
@@ -285,25 +303,25 @@ class PostService {
             await this.postModel.findOneAndUpdate({
                 filter: {
                     _id: postId,
-                    createdBy: req.user?._id
+                    createdBy: req.user?._id,
                 },
                 update: {
                     deletedBy: req.user?._id,
-                    deletedAt: new Date()
-                }
+                    deletedAt: new Date(),
+                },
             }),
             await this.commentModel.updateMany({
                 filter: {
-                    postId
+                    postId,
                 },
                 update: {
                     deletedBy: req.user?._id,
-                    deletedAt: new Date()
-                }
-            })
+                    deletedAt: new Date(),
+                },
+            }),
         ]);
         return (0, success_response_1.successResponse)({
-            res
+            res,
         });
     };
     deletePost = async (req, res) => {
@@ -314,18 +332,104 @@ class PostService {
                     _id: postId,
                     createdBy: req.user?._id,
                     deletedBy: { $exists: true },
-                    deletedAt: { $exists: true }
+                    deletedAt: { $exists: true },
                 },
             }),
             await this.commentModel.deleteMany({
                 filter: {
-                    postId
+                    postId,
                 },
-            })
+            }),
         ]);
         return (0, success_response_1.successResponse)({
-            res
+            res,
         });
     };
+    allPosts = async ({ page, size, }, authUser) => {
+        const posts = await this.postModel.paginate({
+            filter: {
+                $or: postAvailability(authUser),
+                createdBy: { $nin: authUser.BlockList || [] },
+            },
+            page,
+            size,
+            options: {
+                populate: [
+                    {
+                        path: "comments",
+                        match: {
+                            commentId: { $exists: false },
+                            deletedAt: {
+                                $exists: false,
+                            },
+                        },
+                        populate: [
+                            {
+                                path: "reply",
+                                match: {
+                                    commentId: { $exists: false },
+                                    deletedAt: {
+                                        $exists: false,
+                                    },
+                                },
+                                populate: [
+                                    {
+                                        path: "reply",
+                                        match: {
+                                            commentId: { $exists: false },
+                                            deletedAt: {
+                                                $exists: false,
+                                            },
+                                        },
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        path: "createdBy",
+                    },
+                ],
+            },
+        });
+        return posts;
+    };
+    likeGraphQlPost = async ({ postId, action }, authUser) => {
+        let update = {
+            $addToSet: { likes: authUser._id },
+        };
+        if (action === Post_model_1.LikeActionEnum.unlike) {
+            update = {
+                $pull: { likes: authUser._id },
+            };
+        }
+        const post = await this.postModel.findOneAndUpdate({
+            filter: {
+                _id: postId,
+                $or: postAvailability(authUser),
+                createdBy: { $nin: authUser.BlockList || [] },
+            },
+            update,
+        });
+        if (!post ||
+            !(await this.userModel.findOne({
+                filter: {
+                    _id: post?.createdBy,
+                    BlockList: { $nin: [authUser._id] },
+                },
+            }))) {
+            throw new graphql_1.GraphQLError("Post not exist or In-valid postId");
+        }
+        if (action !== Post_model_1.LikeActionEnum.unlike) {
+            (0, Gateway_1.getIo)()
+                .to(Gateway_1.connectedSockets.get(post.createdBy.toString()))
+                .emit("likePost", {
+                postId,
+                userId: authUser._id,
+            });
+        }
+        return post;
+    };
 }
+exports.PostService = PostService;
 exports.postService = new PostService();

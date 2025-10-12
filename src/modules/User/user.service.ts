@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
-import { IChangeRoleBodyDto, IChangeRoleParamsDto, IFreezeAccountParamsDto, IHardDeleteAccountParamsDto, ILogoutBodyDto, IRestoreAccountParamsDto, IShareProfileParamsDto, IUpdateBasicInfoBodyDto, IUpdateEmailBodyDto, IUpdatePasswordBodyDto } from "./user.dto";
+import { IChangeRoleBodyDto, IChangeRoleParamsDto, IFreezeAccountParamsDto, IHardDeleteAccountParamsDto, ILogoutBodyDto, IRestoreAccountParamsDto, IUpdateBasicInfoBodyDto, IUpdateEmailBodyDto, IUpdatePasswordBodyDto } from "./user.dto";
 import { RootFilterQuery, Types, UpdateQuery } from "mongoose";
-import { BlockActionEnum, HUserDocument, IUser, RoleEnum, UserModel } from "../../DB/models/User.model";
+import { BlockActionEnum, GenderEnum, HUserDocument, IUser, RoleEnum, UserModel } from "../../DB/models/User.model";
 import { createLoginCredentials, createRevokeToken, LogoutEnum } from "../../utils/Security/token.security";
 import { ChatRepository, FriendRequestRepository, PostRepository, UserRepository } from "../../DB/Repository";
 import { JwtPayload } from "jsonwebtoken";
@@ -19,11 +19,16 @@ import { generateEncryption } from "../../utils/Security/Encryption.security";
 import { PostModel } from "../../DB/models/Post.model";
 import { FriendRequestModel } from "../../DB/models/FriendRequest.model";
 import { ChatModel } from "../../DB/models/Chat.model";
+import { IUser as IUserGql } from "./user.schema.gql";
+import { GraphQLError } from "graphql";
 
 
-
-
-class UserService {
+let users: IUserGql[] = [
+    { id: 1, name: "Eman", email: "Eman@gmail.com", gender: GenderEnum.female, password: "55445", followers: [] },
+    { id: 2, name: "Ahmed", email: "Ahmed@gmail.com", gender: GenderEnum.male, password: "55445", followers: [] },
+    { id: 3, name: "Mariem", email: "Mariem@gmail.com", gender: GenderEnum.female, password: "55445", followers: [] },
+];
+export class UserService {
     private userModel = new UserRepository(UserModel);
     private postModel = new PostRepository(PostModel);
     private chatModel = new ChatRepository(ChatModel);
@@ -595,7 +600,7 @@ class UserService {
                 friends: {
                     $in: [req.user?._id]
                 },
-                  BlockList: { $nin: [req.user?._id] }
+                BlockList: { $nin: [req.user?._id] }
             },
             update: {
                 $pull: {
@@ -625,7 +630,7 @@ class UserService {
     }
 
     blockUser = async (req: Request, res: Response): Promise<Response> => {
-        const { userId } = req.params as unknown as{ userId: Types.ObjectId };
+        const { userId } = req.params as unknown as { userId: Types.ObjectId };
         const { action } = req.query as unknown as { action: BlockActionEnum };
 
         let denyUsers = [RoleEnum.superAdmin, RoleEnum.admin];
@@ -674,11 +679,11 @@ class UserService {
                 $pull: {
                     BlockList: userId
                 }
-            };    
+            };
         }
 
 
-        const user = await this.userModel.findOneAndUpdate({      
+        const user = await this.userModel.findOneAndUpdate({
             filter,
             update
         });
@@ -698,6 +703,46 @@ class UserService {
         });
     }
 
+    welcome = (): string => {
+      //  console.log({ user });
+        
+        return "Done";
+    }
+
+    checkBoolean = (): boolean => {
+        return true;
+    }
+
+    getAllUsers = async (args: { gender: GenderEnum }, authUser: HUserDocument): Promise<HUserDocument[]> => {
+        return await this.userModel.find({
+            filter: {
+                _id: { $ne: authUser._id },
+                gender: args.gender
+            }
+        });
+    }
+
+    searchUser = (args: { email: string }): { message: string, statusCode: number, data: IUserGql } => {
+        const user = users.find(ele => ele.email === args.email);
+        if (!user) {
+            throw new GraphQLError("fail to find matching result", {
+                extensions: {
+                    statusCode: 404
+                }
+            });
+        }
+        return { message: "Done", statusCode: 200, data: user };
+    }
+
+    addFollower = (args: { friendId: number, myId: number }): IUserGql[] => {
+        users = users.map((ele: IUserGql): IUserGql => {
+            if (ele.id === args.friendId) {
+                ele.followers.push(args.myId)
+            }
+            return ele;
+        });
+        return users;
+    }
 }
 
 

@@ -1,11 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.blockUser = exports.unfriend = exports.deleteFriendRequest = exports.acceptFriendRequest = exports.sentFriendRequest = exports.changeRole = exports.updateBasicInfo = exports.updateEmail = exports.updatePassword = exports.shareProfile = exports.hardDelete = exports.restoreAccount = exports.freezeAccount = exports.logout = void 0;
+exports.blockUser = exports.unfriend = exports.deleteFriendRequest = exports.acceptFriendRequest = exports.sentFriendRequest = exports.changeRole = exports.updateBasicInfo = exports.updateEmail = exports.updatePassword = exports.shareProfile = exports.hardDelete = exports.restoreAccount = exports.freezeAccount = exports.logout = exports.welcome = void 0;
 const zod_1 = require("zod");
 const token_security_1 = require("../../utils/Security/token.security");
 const mongoose_1 = require("mongoose");
 const validation_middleware_1 = require("../../middleware/validation.middleware");
 const User_model_1 = require("../../DB/models/User.model");
+exports.welcome = zod_1.z.strictObject({
+    name: zod_1.z.string().min(2).max(20)
+});
 exports.logout = {
     body: zod_1.z.strictObject({
         flag: zod_1.z.enum(token_security_1.LogoutEnum).default(token_security_1.LogoutEnum.only),

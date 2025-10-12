@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.UserService = void 0;
 const User_model_1 = require("../../DB/models/User.model");
 const token_security_1 = require("../../utils/Security/token.security");
 const Repository_1 = require("../../DB/Repository");
@@ -15,6 +16,12 @@ const Encryption_security_1 = require("../../utils/Security/Encryption.security"
 const Post_model_1 = require("../../DB/models/Post.model");
 const FriendRequest_model_1 = require("../../DB/models/FriendRequest.model");
 const Chat_model_1 = require("../../DB/models/Chat.model");
+const graphql_1 = require("graphql");
+let users = [
+    { id: 1, name: "Eman", email: "Eman@gmail.com", gender: User_model_1.GenderEnum.female, password: "55445", followers: [] },
+    { id: 2, name: "Ahmed", email: "Ahmed@gmail.com", gender: User_model_1.GenderEnum.male, password: "55445", followers: [] },
+    { id: 3, name: "Mariem", email: "Mariem@gmail.com", gender: User_model_1.GenderEnum.female, password: "55445", followers: [] },
+];
 class UserService {
     userModel = new Repository_1.UserRepository(User_model_1.UserModel);
     postModel = new Repository_1.PostRepository(Post_model_1.PostModel);
@@ -550,5 +557,40 @@ class UserService {
             res,
         });
     };
+    welcome = () => {
+        return "Done";
+    };
+    checkBoolean = () => {
+        return true;
+    };
+    getAllUsers = async (args, authUser) => {
+        return await this.userModel.find({
+            filter: {
+                _id: { $ne: authUser._id },
+                gender: args.gender
+            }
+        });
+    };
+    searchUser = (args) => {
+        const user = users.find(ele => ele.email === args.email);
+        if (!user) {
+            throw new graphql_1.GraphQLError("fail to find matching result", {
+                extensions: {
+                    statusCode: 404
+                }
+            });
+        }
+        return { message: "Done", statusCode: 200, data: user };
+    };
+    addFollower = (args) => {
+        users = users.map((ele) => {
+            if (ele.id === args.friendId) {
+                ele.followers.push(args.myId);
+            }
+            return ele;
+        });
+        return users;
+    };
 }
+exports.UserService = UserService;
 exports.default = new UserService;
